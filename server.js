@@ -56,7 +56,7 @@ app.get("/health", (req, res) => {
   res.json({
     ok: true,
     app: "AVDC",
-    version: "6.0.0",
+    version: "6.0.1",
     module: "v6-ia-generica-opcional-por-usuario",
     database: process.env.DATABASE_URL ? "postgres" : "not-configured",
     githubConfigured: !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET && process.env.GITHUB_CALLBACK_URL),

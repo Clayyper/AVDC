@@ -1,4 +1,4 @@
-# AVDC V6.0 — IA genérica opcional por usuário
+# AVDC V6.0.1 — IA genérica opcional por usuário
 
 Base oficial: ZIP validado pelo usuário derivado da v5.0.6.
 

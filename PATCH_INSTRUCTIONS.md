@@ -1,53 +1,49 @@
-# PATCH INSTRUCTIONS — AVDC V6.0
+# AVDC V6.0.1 — Instruções do patch
 
-Base esperada: último ZIP validado pelo usuário no Render (`AVDC-main.zip`), derivado da v5.0.6, mesmo que alguns metadados apareçam como v5.0.5.
+Este patch deve ser aplicado sobre o último ZIP validado pelo usuário no Render.
+
+## Objetivo
+
+Subir a V6 inicial com IA genérica configurada pelo usuário e corrigir o erro de deploy em que o `server.js` referenciava `./src/routes/auth`, mas o patch anterior podia não levar essa rota junto.
 
 ## Como aplicar
 
 1. Faça backup do projeto atual.
-2. Extraia este ZIP patch por cima da raiz do projeto AVDC.
-3. Confirme que os arquivos abaixo foram substituídos/adicionados.
-4. Remova a pasta antiga `/report/` se ela ainda existir na raiz.
-5. Use `/checkpoints/` para checkpoints a partir da V6.
-6. Faça deploy no Render.
+2. Extraia este ZIP patch na raiz do projeto, sobrescrevendo arquivos existentes.
+3. Confirme que existem estes arquivos:
 
-## Arquivos alterados/adicionados
+```txt
+server.js
+src/db.js
+src/middleware.js
+src/routes/auth.js
+src/routes/admin.js
+src/routes/user.js
+src/routes/github.js
+src/routes/index.js
+src/routes/ai.js
+public/index.html
+public/app.js
+package.json
+```
 
-- `package.json`
-- `server.js`
-- `public/index.html`
-- `public/app.js`
-- `src/db.js`
-- `src/routes/user.js`
-- `src/routes/index.js`
-- `src/routes/ai.js`
-- `checkpoints/`
-- `PATCH_INSTRUCTIONS.md`
+4. Faça novo deploy no Render.
 
-## O que mudou
+## Validação local recomendada
 
-- Metadados visíveis atualizados para V6.
-- Healthcheck passa a reportar versão `6.0.0`.
-- Checkpoints migrados para `/checkpoints/`.
-- Nova seção visual `Motor de IA` no painel do usuário.
-- IA configurada por usuário, sem prender a OpenAI nem ao `.env` geral.
-- Busca simples continua sem IA.
-- Nova busca semântica só funciona se o usuário configurar o Motor de IA.
-- Se a IA não estiver configurada, a ferramenta mostra aviso claro e não simula busca semântica.
+```bash
+node --check server.js
+node --check src/db.js
+node --check src/middleware.js
+node --check src/routes/auth.js
+node --check src/routes/admin.js
+node --check src/routes/user.js
+node --check src/routes/github.js
+node --check src/routes/index.js
+node --check src/routes/ai.js
+node --check public/app.js
+```
 
-## Migração de banco
+## Observação
 
-A inicialização segura do AVDC adiciona automaticamente, se ainda não existirem, as colunas abaixo em `user_future_config`:
-
-- `ai_provider`
-- `ai_base_url`
-- `ai_model`
-- `ai_token_encrypted`
-- `ai_connected_at`
-
-Nenhuma tabela de dados do cliente é criada. Catálogo, índice, manifest, notas e relatório técnico continuam no GitHub do usuário.
-
-## Princípio V6
-
-Busca simples = sem IA.
-Busca semântica = IA opcional, explícita, configurada pelo usuário e separada.
+A IA continua opcional e configurada por usuário. A busca simples não depende de IA. A busca semântica só deve ser habilitada quando o usuário tiver uma configuração de IA válida.

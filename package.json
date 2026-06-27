@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.0",
-  "description": "AVDC V6 - IA genérica opcional por usuário e base v5.0.6 validada",
+  "version": "6.0.1",
+  "description": "AVDC V6.0.1 - IA generica opcional por usuario + hotfix patch com rotas obrigatorias",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
