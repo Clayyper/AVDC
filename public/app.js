@@ -1,4 +1,12 @@
 let cachedUsers = [];
+
+let advancedFilters = {
+  extensions: [],
+  directories: [],
+  minSizeKB: 0,
+  maxSizeMB: 4,
+  pathContains: ""
+};
 let lastCreatedToken = "";
 
 const $ = (id) => document.getElementById(id);
@@ -731,13 +739,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchIndex(); });
 
   // ====== ÍNDICE AVANÇADO ======
-  let advancedFilters = {
-    extensions: [],
-    directories: [],
-    minSizeKB: 0,
-    maxSizeMB: 4,
-    pathContains: ""
-  };
 
   $("btn-advanced-index").addEventListener("click", async () => {
     $("advanced-index-modal").classList.remove("hidden");
