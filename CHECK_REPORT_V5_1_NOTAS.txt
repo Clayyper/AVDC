@@ -1,0 +1,15 @@
+AVDC v5.0 - Ajuste visual Guardar Nota
+
+Alterações aplicadas:
+- Botão "Guardar nota" removido da área de Busca simples.
+- Botão "Guardar nota" movido para a linha de ações do Catálogo inicial do índice.
+- Botão alinhado à direita, discreto, na mesma linha de Criar catálogo / Atualizar visualização / Índice Avançado Consolidado.
+- Texto de apoio mantido: "Guarde anotações rápidas no seu repositório."
+- Modal e função de salvar nota preservados sem alteração funcional.
+
+Validações executadas:
+- node --check public/app.js
+- node --check server.js
+
+Observação:
+- Ajuste apenas visual/UX. Não altera rota, salvamento, extensão .vcd ou diretório /avdc-notes/.

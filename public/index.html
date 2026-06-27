@@ -253,9 +253,18 @@
       </div>
     </div>
 
-    <button class="btn btn-success" id="btn-prepare-catalog">Criar catálogo do índice</button>
-    <button class="btn btn-secondary" id="btn-refresh-catalog">Atualizar visualização</button>
-    <button class="btn" id="btn-advanced-index">Índice Avançado Consolidado</button>
+    <div class="catalog-actions-row">
+      <div class="catalog-actions-left">
+        <button class="btn btn-success" id="btn-prepare-catalog">Criar catálogo do índice</button>
+        <button class="btn btn-secondary" id="btn-refresh-catalog">Atualizar visualização</button>
+        <button class="btn" id="btn-advanced-index">Índice Avançado Consolidado</button>
+      </div>
+
+      <div class="catalog-actions-right">
+        <button class="btn btn-link btn-note" id="btn-open-note">Guardar nota</button>
+        <span class="note-hint-inline">Guarde anotações rápidas no seu repositório.</span>
+      </div>
+    </div>
 
     <div id="catalog-msg" class="msg"></div>
 
@@ -287,8 +296,6 @@
     </div>
 
     <button class="btn btn-success" id="btn-search-index">Buscar</button>
-    <button class="btn btn-link btn-note" id="btn-open-note">Guardar nota</button>
-    <p class="note-hint">Guarde anotações rápidas no seu repositório.</p>
 
     <div id="search-msg" class="msg"></div>
 

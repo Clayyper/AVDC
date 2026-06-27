@@ -690,6 +690,50 @@ button {
 }
 .btn-info:hover { background: #138496; }
 
+
+.catalog-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.catalog-actions-left,
+.catalog-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.catalog-actions-right {
+  margin-left: auto;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.note-hint-inline {
+  color: var(--text-support);
+  font-size: 12px;
+  max-width: 220px;
+}
+
+@media (max-width: 760px) {
+  .catalog-actions-row,
+  .catalog-actions-left,
+  .catalog-actions-right {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-actions-right {
+    margin-left: 0;
+    text-align: left;
+  }
+}
+
 /* ===== Guardar nota ===== */
 .btn-note {
   background: transparent;
