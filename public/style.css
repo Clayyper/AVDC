@@ -714,12 +714,6 @@ button {
   text-align: right;
 }
 
-.note-hint-inline {
-  color: var(--text-support);
-  font-size: 12px;
-  max-width: 220px;
-}
-
 @media (max-width: 760px) {
   .catalog-actions-row,
   .catalog-actions-left,
@@ -736,20 +730,7 @@ button {
 
 /* ===== Guardar nota ===== */
 .btn-note {
-  background: transparent;
-  color: var(--text-support);
-  border: none;
-  padding: 12px 8px;
-  font-size: 14px;
-  text-decoration: underline;
-}
-.btn-note:hover {
-  color: var(--primary-hover);
-}
-.note-hint {
-  color: var(--text-support);
-  font-size: 13px;
-  margin-top: 2px;
+  white-space: nowrap;
 }
 #note-modal textarea {
   width: 100%;
