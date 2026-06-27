@@ -13,7 +13,6 @@ const MANIFEST_PATH = `${AVDC_INDEX_DIR}/manifest.json`;
 const CATALOG_PATH = `${AVDC_INDEX_DIR}/catalog.json`;
 const SEARCH_INDEX_PATH = `${AVDC_INDEX_DIR}/search-index.json`;
 
-const DEFAULT_CONTENT_LIMIT = 80;
 const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 
 const TEXT_EXTENSIONS = new Set([
@@ -162,17 +161,25 @@ function shouldTryExtractContent(file) {
   const size = Number(file.sizeBytes || 0);
   const maxBytes = Number(process.env.AVDC_MAX_FILE_BYTES || DEFAULT_MAX_FILE_BYTES);
 
-  if (size > maxBytes) return false;
-  if (BINARY_EXTENSIONS.has(ext)) return false;
+  if (size > maxBytes) {
+    console.log(`[AVDC] IGNORADO (tamanho): ${file.name} | ext: "${ext}" | size: ${size} bytes`);
+    return false;
+  }
+  if (BINARY_EXTENSIONS.has(ext)) {
+    console.log(`[AVDC] IGNORADO (binário): ${file.name} | ext: "${ext}"`);
+    return false;
+  }
   if (TEXT_EXTENSIONS.has(ext)) return true;
 
-  /*
-    Sem extensão ou extensão desconhecida:
-    usuário avançado, repositório de código —
-    tenta ler como texto dentro do limite geral.
-    fetchFileContent descarta se for binário (null byte).
-  */
-  return size > 0;
+  // Sem extensão ou extensão desconhecida: tenta ler como texto.
+  // fetchFileContent descarta se for binário (null byte).
+  if (size === 0) {
+    console.log(`[AVDC] IGNORADO (vazio): ${file.name} | ext: "${ext}"`);
+    return false;
+  }
+
+  console.log(`[AVDC] TENTANDO sem extensão conhecida: ${file.name} | ext: "${ext}" | size: ${size} bytes`);
+  return true;
 }
 
 function safePreview(text, max = 420) {
@@ -749,12 +756,12 @@ router.post("/prepare", async (req, res) => {
       }
     }
 
-    const contentLimit = Number(process.env.AVDC_CONTENT_FILE_LIMIT || DEFAULT_CONTENT_LIMIT);
     let contentIndexedCount = 0;
     let triedContentCount = 0;
 
+    console.log(`[AVDC] Iniciando indexação de conteúdo. Total de arquivos descobertos: ${files.length}`);
+
     for (const file of files) {
-      if (contentIndexedCount >= contentLimit) break;
       if (!shouldTryExtractContent(file)) continue;
 
       triedContentCount += 1;
@@ -774,6 +781,8 @@ router.post("/prepare", async (req, res) => {
         file.contentError = error.message || String(error);
       }
     }
+
+    console.log(`[AVDC] Indexação concluída. Tentados: ${triedContentCount} | Indexados: ${contentIndexedCount} | Total: ${files.length}`);
 
     for (const file of files) {
       await query(`
@@ -885,8 +894,7 @@ router.post("/prepare", async (req, res) => {
       run: mapRun(run),
       content: {
         tried: triedContentCount,
-        indexed: contentIndexedCount,
-        limit: contentLimit
+        indexed: contentIndexedCount
       },
       files: visibleFiles.map(mapFile)
     });
