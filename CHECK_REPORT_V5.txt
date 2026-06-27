@@ -1,0 +1,16 @@
+AVDC v5.0 - Prioridade 1
+
+Alterações aplicadas:
+- Repositórios carregados agora aparecem como resumo por padrão.
+- Botão de abrir/ocultar listagem fica perto do resumo.
+- Listagem de repositórios com paginação de 15 itens por página.
+- Catálogo agora aparece como resumo por padrão.
+- Botão Ver arquivos do catálogo / Ocultar arquivos do catálogo fica perto do resumo.
+- Arquivos do catálogo com paginação de 15 itens por página.
+- Pastas técnicas avdc-index, .avdc-index e .git são filtradas na visualização do catálogo.
+- Interface atualizada para v5.0.
+
+Validações executadas:
+- node --check public/app.js
+- node --check server.js
+- node --check src/routes/index.js

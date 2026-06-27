@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "4.4.1",
-  "description": "AVDC v4.4 - Base consolidada com notas rápidas",
+  "version": "5.0.0",
+  "description": "AVDC v5.0 - Interface limpa com listagens recolhíveis e paginação",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

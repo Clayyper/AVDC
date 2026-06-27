@@ -9,6 +9,15 @@ let advancedFilters = {
 };
 let lastCreatedToken = "";
 
+const AVDC_PAGE_SIZE = 15;
+let cachedRepos = [];
+let repoListVisible = false;
+let repoPage = 1;
+let cachedCatalogFiles = [];
+let catalogListVisible = false;
+let catalogPage = 1;
+let catalogTechnicalIgnoredCount = 0;
+
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -370,14 +379,63 @@ function renderRepositoryStatus(repository) {
 async function loadRepos() {
   try {
     const data = await api("/auth/github/repos");
-    const box = $("repos-container");
+    cachedRepos = data.repos || [];
+    repoPage = 1;
+    repoListVisible = false;
+    renderReposList();
 
-    if (!data.repos || data.repos.length === 0) {
-      box.innerHTML = "<p>Nenhum repositório encontrado.</p>";
+    if (cachedRepos.length === 0) {
+      msg("repos-msg", "Nenhum repositório encontrado.", "error");
       return;
     }
 
-    box.innerHTML = data.repos.map(repo => `
+    msg("repos-msg", `${cachedRepos.length} repositório(s) encontrado(s).`, "ok");
+  } catch (err) {
+    msg("repos-msg", err.message, "error");
+  }
+}
+
+function renderReposList() {
+  const box = $("repos-container");
+  if (!box) return;
+
+  if (!cachedRepos || cachedRepos.length === 0) {
+    box.innerHTML = "<p>Conecte o GitHub e clique em listar repositórios.</p>";
+    return;
+  }
+
+  const total = cachedRepos.length;
+  const totalPages = Math.max(1, Math.ceil(total / AVDC_PAGE_SIZE));
+  repoPage = Math.min(Math.max(repoPage, 1), totalPages);
+
+  const actionText = repoListVisible ? "Ocultar listagem de repositórios" : "Ver listagem de repositórios";
+
+  if (!repoListVisible) {
+    box.innerHTML = `
+      <div class="avdc-list-summary">
+        <p><strong>Repositórios carregados.</strong></p>
+        <p>${total} repositório(s) encontrado(s).</p>
+        <button class="btn btn-secondary" type="button" onclick="toggleRepoList()">${actionText}</button>
+      </div>
+    `;
+    return;
+  }
+
+  const startIndex = (repoPage - 1) * AVDC_PAGE_SIZE;
+  const pageItems = cachedRepos.slice(startIndex, startIndex + AVDC_PAGE_SIZE);
+  const from = startIndex + 1;
+  const to = Math.min(startIndex + pageItems.length, total);
+
+  box.innerHTML = `
+    <div class="avdc-list-summary">
+      <p><strong>Repositórios carregados.</strong></p>
+      <p>${total} repositório(s) encontrado(s).</p>
+      <button class="btn btn-secondary" type="button" onclick="toggleRepoList()">${actionText}</button>
+    </div>
+
+    <div class="avdc-pagination-top">Mostrando ${from}–${to} de ${total} repositório(s)</div>
+
+    ${pageItems.map(repo => `
       <div class="repo-item ${repo.isDataRepo || repo.isIndexRepo ? "repo-active" : ""}">
         <div>
           <p>
@@ -397,12 +455,21 @@ async function loadRepos() {
           </button>
         </div>
       </div>
-    `).join("");
+    `).join("")}
 
-    msg("repos-msg", "Repositórios carregados.", "ok");
-  } catch (err) {
-    msg("repos-msg", err.message, "error");
-  }
+    ${renderPaginationControls("repo", repoPage, totalPages)}
+  `;
+}
+
+function toggleRepoList() {
+  repoListVisible = !repoListVisible;
+  if (repoListVisible) repoPage = 1;
+  renderReposList();
+}
+
+function changeRepoPage(direction) {
+  repoPage += direction;
+  renderReposList();
 }
 
 
@@ -457,6 +524,10 @@ function clearCatalogView() {
   if (runDate) runDate.textContent = "-";
   if (writtenLabel) writtenLabel.textContent = "Ainda não gravado";
   if (indexRepoLabel) indexRepoLabel.textContent = "Nenhum";
+  cachedCatalogFiles = [];
+  catalogListVisible = false;
+  catalogPage = 1;
+  catalogTechnicalIgnoredCount = 0;
   if (box) box.innerHTML = "<p>Nenhum catálogo criado ainda.</p>";
 }
 
@@ -559,12 +630,64 @@ function renderCatalogFiles(files) {
 
   if (!box) return;
 
-  if (!files || files.length === 0) {
+  const originalFiles = files || [];
+  const filteredFiles = originalFiles.filter(file => !isReservedTechnicalPath(file.path));
+  const ignoredCount = originalFiles.length - filteredFiles.length;
+
+  cachedCatalogFiles = filteredFiles;
+  catalogTechnicalIgnoredCount = ignoredCount;
+  catalogPage = 1;
+  catalogListVisible = false;
+  renderCatalogList();
+}
+
+function renderCatalogList() {
+  const box = $("catalog-container");
+  if (!box) return;
+
+  const files = cachedCatalogFiles || [];
+  const total = files.length;
+
+  if (total === 0) {
     box.innerHTML = "<p>Nenhum arquivo no catálogo.</p>";
     return;
   }
 
+  const totalPages = Math.max(1, Math.ceil(total / AVDC_PAGE_SIZE));
+  catalogPage = Math.min(Math.max(catalogPage, 1), totalPages);
+
+  const actionText = catalogListVisible ? "Ocultar arquivos do catálogo" : "Ver arquivos do catálogo";
+  const reservedNote = catalogTechnicalIgnoredCount > 0
+    ? `<p class="catalog-help">Pastas técnicas e reservadas foram ignoradas automaticamente.</p>`
+    : "";
+
+  if (!catalogListVisible) {
+    box.innerHTML = `
+      <div class="avdc-list-summary">
+        <p><strong>Catálogo criado.</strong></p>
+        <p>${total} arquivo(s) no catálogo.</p>
+        <button class="btn btn-secondary" type="button" onclick="toggleCatalogList()">${actionText}</button>
+        ${reservedNote}
+      </div>
+    `;
+    return;
+  }
+
+  const startIndex = (catalogPage - 1) * AVDC_PAGE_SIZE;
+  const pageItems = files.slice(startIndex, startIndex + AVDC_PAGE_SIZE);
+  const from = startIndex + 1;
+  const to = Math.min(startIndex + pageItems.length, total);
+
   box.innerHTML = `
+    <div class="avdc-list-summary">
+      <p><strong>Catálogo criado.</strong></p>
+      <p>${total} arquivo(s) no catálogo.</p>
+      <button class="btn btn-secondary" type="button" onclick="toggleCatalogList()">${actionText}</button>
+      ${reservedNote}
+    </div>
+
+    <div class="avdc-pagination-top">Mostrando ${from}–${to} de ${total} arquivo(s) do catálogo</div>
+
     <div class="catalog-table-wrap">
       <table class="catalog-table">
         <thead>
@@ -577,7 +700,7 @@ function renderCatalogFiles(files) {
           </tr>
         </thead>
         <tbody>
-          ${files.map(file => `
+          ${pageItems.map(file => `
             <tr>
               <td><a href="${escapeAttr(file.githubUrl || "#")}" target="_blank" rel="noopener noreferrer">${escapeHTML(file.name || "-")}</a></td>
               <td>${escapeHTML(file.extension || "-")}</td>
@@ -589,8 +712,43 @@ function renderCatalogFiles(files) {
         </tbody>
       </table>
     </div>
-    <p class="catalog-help">Mostrando até 500 arquivos do catálogo mais recente.</p>
+
+    ${renderPaginationControls("catalog", catalogPage, totalPages)}
   `;
+}
+
+function toggleCatalogList() {
+  catalogListVisible = !catalogListVisible;
+  if (catalogListVisible) catalogPage = 1;
+  renderCatalogList();
+}
+
+function changeCatalogPage(direction) {
+  catalogPage += direction;
+  renderCatalogList();
+}
+
+function renderPaginationControls(type, currentPage, totalPages) {
+  const previousAction = type === "repo" ? "changeRepoPage(-1)" : "changeCatalogPage(-1)";
+  const nextAction = type === "repo" ? "changeRepoPage(1)" : "changeCatalogPage(1)";
+
+  return `
+    <div class="avdc-pagination-controls">
+      <button class="btn btn-secondary" type="button" onclick="${previousAction}" ${currentPage <= 1 ? "disabled" : ""}>Anterior</button>
+      <span>Página ${currentPage} de ${totalPages}</span>
+      <button class="btn btn-secondary" type="button" onclick="${nextAction}" ${currentPage >= totalPages ? "disabled" : ""}>Próxima</button>
+    </div>
+  `;
+}
+
+function isReservedTechnicalPath(filePath) {
+  const normalized = String(filePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  return normalized === "avdc-index" ||
+    normalized.startsWith("avdc-index/") ||
+    normalized === ".avdc-index" ||
+    normalized.startsWith(".avdc-index/") ||
+    normalized === ".git" ||
+    normalized.startsWith(".git/");
 }
 
 function formatBytes(value) {
