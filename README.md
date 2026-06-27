@@ -131,7 +131,7 @@ Sugestões para as próximas versões:
 - Busca semântica/IA como camada opcional.
 
 
-## V6.0.3
+## V6.0.4
 
 Correção de interface da busca semântica:
 
@@ -140,3 +140,10 @@ Correção de interface da busca semântica:
 - Checkbox Ativar busca semântica valida Motor de IA configurado.
 - Ao ativar, desabilita controles da busca simples.
 - Mostra formulário semântico com modos otimizada e completa.
+
+
+## V6.0.4 — hotfix de deploy
+
+Correção de empacotamento: o patch agora inclui todos os módulos obrigatórios usados pelo `server.js`, incluindo `src/db.js`, `src/middleware.js` e rotas essenciais.
+
+Não altera a regra funcional da busca semântica ou do Motor de IA.
