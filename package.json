@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.7",
-  "description": "AVDC V6.0.7 - layout semântico antes do catálogo",
+  "version": "6.0.8",
+  "description": "AVDC V6.0.8 - hotfix deploy com dependências obrigatórias no patch",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

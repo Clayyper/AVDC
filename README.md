@@ -164,7 +164,7 @@ Mantém:
 Esta versão não muda o conceito funcional validado na V6.0.4; consolida a entrega como V6.0.5.
 
 
-## V6.0.7 — teste da IA salva no banco
+## V6.0.8 — teste da IA salva no banco
 
 Ajuste pontual sobre a V6.0.5.
 
@@ -174,9 +174,22 @@ Ajuste pontual sobre a V6.0.5.
 - A busca semântica continua separada: só é ativada pelo checkbox e continua desabilitando os controles da busca simples quando marcada.
 
 
-## V6.0.7 — busca semântica antes do catálogo
+## V6.0.8 — busca semântica antes do catálogo
 
 - Preserva o teste de conexão da IA validado.
 - Move o quadro Motor de IA para cima do fluxo operacional.
 - Move o quadro Busca semântica para antes do Catálogo inicial do índice.
 - Mantém a regra: ao ativar busca semântica, os controles de catálogo, índice e busca simples abaixo ficam desabilitados.
+
+
+## V6.0.8 — hotfix de deploy Render
+
+Esta versão mantém a V6.0.7 funcional e corrige o empacotamento do patch.
+
+Correção principal:
+- o patch agora inclui explicitamente todos os módulos exigidos por `server.js` no start do Render;
+- inclui `src/db.js`, `src/middleware.js` e todas as rotas obrigatórias;
+- evita erro `Cannot find module './src/db'` quando o patch é aplicado sobre uma base antiga/incompleta.
+
+Não altera a regra validada do botão de teste da IA salva no banco.
+Não altera a regra da busca semântica antes do catálogo.

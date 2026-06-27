@@ -56,8 +56,8 @@ app.get("/health", (req, res) => {
   res.json({
     ok: true,
     app: "AVDC",
-    version: "6.0.7",
-    module: "v6-hotfix-patch-dependencias-server",
+    version: "6.0.8",
+    module: "v6-0-8-hotfix-deploy-dependencias-completas",
     database: process.env.DATABASE_URL ? "postgres" : "not-configured",
     githubConfigured: !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET && process.env.GITHUB_CALLBACK_URL),
     aiMode: "user-configured-optional"
@@ -69,7 +69,7 @@ async function start() {
     await initDatabase();
 
     app.listen(PORT, () => {
-      console.log(`AVDC V6.0.7 rodando na porta ${PORT}`);
+      console.log(`AVDC V6.0.8 rodando na porta ${PORT}`);
     });
   } catch (error) {
     console.error("Erro ao iniciar AVDC:", error);

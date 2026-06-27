@@ -1,34 +1,50 @@
-# AVDC V6.0.7 — Patch de layout da busca semântica
+# AVDC V6.0.8 — Patch hotfix Render / dependências completas
 
 ## Objetivo
 
-Corrigir a ordem visual dos quadros na tela principal.
+Corrigir erro de deploy no Render:
 
-## O que muda
+```txt
+Error: Cannot find module './src/db'
+Require stack:
+- /opt/render/project/src/server.js
+```
 
-- O quadro **Motor de IA** fica antes da área operacional de busca.
-- O quadro **Busca semântica** fica antes do quadro **Catálogo inicial do índice**.
-- O botão **Testar conexão da IA salva** permanece no Motor de IA e continua usando os dados salvos no banco.
-- A lógica de desabilitar controles da busca simples/catálogo ao marcar busca semântica foi preservada.
+## Causa
 
-## Ordem visual esperada
+O `server.js` da V6 exige módulos como `src/db.js`, `src/middleware.js` e rotas em `src/routes/`.
+Quando um patch parcial é aplicado sobre uma base antiga/incompleta, esses arquivos podem não existir no repositório publicado.
 
-1. Repositórios do AVDC
-2. Motor de IA
-3. Busca semântica
-4. Catálogo inicial do índice
-5. Busca simples
+## Correção
 
-## Arquivos alterados
+Este patch inclui todos os arquivos necessários para o start do servidor, não apenas os arquivos visualmente alterados.
 
-- package.json
-- server.js
-- src/routes/index.js
-- public/index.html
-- README.md
-- PATCH_INSTRUCTIONS.md
-- checkpoints/CHECKPOINT_V6_0_7_LAYOUT_BUSCA_SEMANTICA_ANTES_CATALOGO.md
+## Arquivos incluídos
 
-## Aplicação
+- `server.js`
+- `package.json`
+- `src/db.js`
+- `src/middleware.js`
+- `src/routes/auth.js`
+- `src/routes/admin.js`
+- `src/routes/user.js`
+- `src/routes/github.js`
+- `src/routes/index.js`
+- `src/routes/ai.js`
+- `public/index.html`
+- `public/app.js`
+- `public/style.css`
+- `README.md`
+- `PATCH_INSTRUCTIONS.md`
+- `checkpoints/CHECKPOINT_V6_0_8_HOTFIX_DEPENDENCIAS_COMPLETAS_PATCH.md`
 
-Copie os arquivos deste patch sobre a base V6.0.6 ou use o ZIP completo V6.0.7.
+## Como aplicar
+
+Copie o conteúdo deste patch sobre o repositório atual, preservando as mesmas pastas.
+
+Depois faça commit/push e redeploy no Render.
+
+## Regra preservada
+
+Esta versão não altera a lógica validada da V6.0.7.
+Ela apenas garante que o deploy tenha todos os módulos exigidos pelo `server.js`.
