@@ -730,6 +730,41 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btn-search-index").onclick = searchIndex;
   $("search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchIndex(); });
 
+  // ====== ÍNDICE AVANÇADO ======
+  let advancedFilters = {
+    extensions: [],
+    directories: [],
+    minSizeKB: 0,
+    maxSizeMB: 4,
+    pathContains: ""
+  };
+
+  $("btn-advanced-index").addEventListener("click", async () => {
+    $("advanced-index-modal").classList.remove("hidden");
+    await loadAdvancedFilterOptions();
+  });
+
+  $("btn-close-advanced-modal").addEventListener("click", () => {
+    $("advanced-index-modal").classList.add("hidden");
+  });
+
+  $("btn-cancel-advanced").addEventListener("click", () => {
+    $("advanced-index-modal").classList.add("hidden");
+  });
+
+  $("btn-apply-advanced-filters").addEventListener("click", () => {
+    const selectedExtensions = Array.from(document.querySelectorAll(".ext-checkbox:checked")).map(cb => cb.value);
+    const selectedDirectories = Array.from(document.querySelectorAll(".dir-checkbox:checked")).map(cb => cb.value);
+    const minSizeKB = parseInt($("filter-min-size").value) || 0;
+    const maxSizeMB = parseInt($("filter-max-size").value) || 4;
+    const pathContains = $("filter-path-contains").value.trim();
+
+    advancedFilters = { extensions: selectedExtensions, directories: selectedDirectories, minSizeKB, maxSizeMB, pathContains };
+
+    $("advanced-index-modal").classList.add("hidden");
+    msg("catalog-msg", `Filtros avançados aplicados. Extensões: ${selectedExtensions.length > 0 ? selectedExtensions.map(e => "." + e).join(", ") : "todas"}.`, "ok");
+  });
+
   const params = new URLSearchParams(location.search);
   if (params.get("github") === "connected") {
     history.replaceState({}, "", "/");
@@ -754,28 +789,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-// ====== ÍNDICE AVANÇADO ======
 
-let advancedFilters = {
-  extensions: [],
-  directories: [],
-  minSizeKB: 0,
-  maxSizeMB: 4,
-  pathContains: ""
-};
-
-$("btn-advanced-index").addEventListener("click", async () => {
-  $("advanced-index-modal").classList.remove("hidden");
-  await loadAdvancedFilterOptions();
-});
-
-$("btn-close-advanced-modal").addEventListener("click", () => {
-  $("advanced-index-modal").classList.add("hidden");
-});
-
-$("btn-cancel-advanced").addEventListener("click", () => {
-  $("advanced-index-modal").classList.add("hidden");
-});
 
 async function loadAdvancedFilterOptions() {
   const msgEl = $("advanced-msg");
@@ -821,22 +835,3 @@ async function loadAdvancedFilterOptions() {
   }
 }
 
-$("btn-apply-advanced-filters").addEventListener("click", () => {
-  const selectedExtensions = Array.from(document.querySelectorAll(".ext-checkbox:checked")).map(cb => cb.value);
-  const selectedDirectories = Array.from(document.querySelectorAll(".dir-checkbox:checked")).map(cb => cb.value);
-  const minSizeKB = parseInt($("filter-min-size").value) || 0;
-  const maxSizeMB = parseInt($("filter-max-size").value) || 4;
-  const pathContains = $("filter-path-contains").value.trim();
-
-  advancedFilters = { extensions: selectedExtensions, directories: selectedDirectories, minSizeKB, maxSizeMB, pathContains };
-
-  const msgEl = $("advanced-msg");
-  msgEl.innerHTML = `
-    <strong>Filtros aplicados:</strong><br>
-    Extensões: ${selectedExtensions.length > 0 ? selectedExtensions.map(e => "." + e).join(", ") : "todas"}<br>
-    Diretórios: ${selectedDirectories.length > 0 ? selectedDirectories.join(", ") : "todos"}<br>
-    Tamanho: ${minSizeKB} KB a ${maxSizeMB} MB<br>
-    ${pathContains ? `Caminho contém: "${pathContains}"` : ""}
-  `;
-  msgEl.className = "msg ok";
-});
