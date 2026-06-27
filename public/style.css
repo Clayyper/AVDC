@@ -715,17 +715,6 @@ button {
   accent-color: var(--primary-color);
 }
 
-
-.semantic-checkbox {
-  margin-left: 18px;
-}
-
-.semantic-warning {
-  margin: 6px 0 0;
-  color: var(--text-support);
-  font-size: 12px;
-}
-
 .catalog-actions-row {
   display: flex;
   align-items: center;

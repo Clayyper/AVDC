@@ -13,16 +13,12 @@ const AVDC_INDEX_DIR = "avdc-index";
 const MANIFEST_PATH = `${AVDC_INDEX_DIR}/manifest.json`;
 const CATALOG_PATH = `${AVDC_INDEX_DIR}/catalog.json`;
 const SEARCH_INDEX_PATH = `${AVDC_INDEX_DIR}/search-index.json`;
-const SEMANTIC_SEARCH_INDEX_PATH = `${AVDC_INDEX_DIR}/search-index-semantic.json`;
 const EXTRACTION_REPORT_PATH = `${AVDC_INDEX_DIR}/extraction-report.txt`;
 
 const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 const DEFAULT_MAX_TEXT_CHARS = 40000;
 const DEFAULT_MAX_SEARCH_TEXT_CHARS = 12000;
 const DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS = 4 * 1024 * 1024; // ~4 MB de texto antes do JSON/base64
-const DEFAULT_MAX_SEMANTIC_TEXT_CHARS = 24000;
-const DEFAULT_SEMANTIC_CHUNK_CHARS = 1200;
-const DEFAULT_SEMANTIC_CHUNKS_PER_FILE = 12;
 const GITHUB_WRITE_RETRY_STATUSES = new Set([502, 503, 504]);
 
 function envNumber(name, fallback) {
@@ -472,47 +468,6 @@ function buildSearchableFiles(files) {
     .filter(file => file.text.length > 0);
 }
 
-function chunkTextForSemanticIndex(text, chunkSize, maxChunks) {
-  const source = String(text || "").replace(/\s+/g, " ").trim();
-  if (!source) return [];
-
-  const chunks = [];
-  for (let start = 0; start < source.length && chunks.length < maxChunks; start += chunkSize) {
-    const value = source.slice(start, start + chunkSize).trim();
-    if (value) chunks.push({ index: chunks.length + 1, text: value, preview: safePreview(value, 220) });
-  }
-
-  return chunks;
-}
-
-function buildSemanticSearchableFiles(files) {
-  const maxPerFile = envNumber("AVDC_MAX_SEMANTIC_TEXT_CHARS", DEFAULT_MAX_SEMANTIC_TEXT_CHARS);
-  const chunkSize = Math.max(300, envNumber("AVDC_SEMANTIC_CHUNK_CHARS", DEFAULT_SEMANTIC_CHUNK_CHARS));
-  const maxChunks = Math.max(1, envNumber("AVDC_SEMANTIC_CHUNKS_PER_FILE", DEFAULT_SEMANTIC_CHUNKS_PER_FILE));
-
-  return (files || [])
-    .filter(file => file.contentIndexed && file.contentText)
-    .map(file => {
-      const originalText = String(file.contentText || "");
-      const semanticText = originalText.slice(0, maxPerFile);
-      const chunks = chunkTextForSemanticIndex(semanticText, chunkSize, maxChunks);
-
-      return {
-        path: file.path,
-        name: file.name,
-        extension: file.extension,
-        githubUrl: file.githubUrl,
-        preview: file.contentPreview,
-        semanticReady: chunks.length > 0,
-        semanticMode: "chunked-text-v1",
-        textTruncated: originalText.length > semanticText.length,
-        chunkSize,
-        chunks
-      };
-    })
-    .filter(file => file.semanticReady);
-}
-
 async function writeIndexFilesToGithub({
   token,
   indexRepoFullName,
@@ -523,15 +478,13 @@ async function writeIndexFilesToGithub({
   runId,
   files,
   createdAt,
-  writeExtractionReport = false,
-  semanticMode = false
+  writeExtractionReport = false
 }) {
   const searchableFiles = buildSearchableFiles(files);
-  const semanticFiles = semanticMode ? buildSemanticSearchableFiles(files) : [];
 
   const manifest = {
     avdc: {
-      version: "5.0.7",
+      version: "5.0.6",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -546,7 +499,6 @@ async function writeIndexFilesToGithub({
       manifestPath: MANIFEST_PATH,
       catalogPath: CATALOG_PATH,
       searchIndexPath: SEARCH_INDEX_PATH,
-      semanticSearchIndexPath: semanticMode ? SEMANTIC_SEARCH_INDEX_PATH : null,
       extractionReportPath: writeExtractionReport ? EXTRACTION_REPORT_PATH : null
     },
     run: {
@@ -554,9 +506,6 @@ async function writeIndexFilesToGithub({
       sortMode,
       filesCount: files.length,
       searchableFilesCount: searchableFiles.length,
-      semanticSearchEnabled: !!semanticMode,
-      semanticSearchFilesCount: semanticFiles.length,
-      semanticSearchIndexPath: semanticMode ? SEMANTIC_SEARCH_INDEX_PATH : null,
       searchIndexTextLimitPerFile: envNumber("AVDC_MAX_SEARCH_TEXT_CHARS", DEFAULT_MAX_SEARCH_TEXT_CHARS),
       searchIndexTextLimitTotal: envNumber("AVDC_MAX_SEARCH_INDEX_TOTAL_CHARS", DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS),
       extractionReportEnabled: !!writeExtractionReport,
@@ -566,7 +515,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "5.0.7",
+      version: "5.0.6",
       type: "catalog"
     },
     source: {
@@ -596,7 +545,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "5.0.7",
+      version: "5.0.6",
       type: "simple-search-index",
       note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
     },
@@ -607,22 +556,6 @@ async function writeIndexFilesToGithub({
     generatedAt: createdAt,
     files: searchableFiles
   };
-
-  const semanticSearchIndex = semanticMode ? {
-    avdc: {
-      version: "5.0.7",
-      type: "semantic-search-index",
-      status: "experimental-ready",
-      note: "Índice separado para busca semântica. Estrutura em blocos de texto preparada para processamento pesado futuro; não substitui o índice simples."
-    },
-    source: {
-      dataRepository: dataRepoFullName,
-      dataDefaultBranch
-    },
-    generatedAt: createdAt,
-    mode: "semantic",
-    files: semanticFiles
-  } : null;
 
   const manifestResult = await putGithubFile(
     indexRepoFullName,
@@ -642,28 +575,14 @@ async function writeIndexFilesToGithub({
     token
   );
 
-  let searchResult = null;
-  let semanticSearchResult = null;
-
-  if (semanticMode) {
-    semanticSearchResult = await putGithubFile(
-      indexRepoFullName,
-      indexDefaultBranch,
-      SEMANTIC_SEARCH_INDEX_PATH,
-      stableJson(semanticSearchIndex),
-      "AVDC: atualizar índice semântico de busca",
-      token
-    );
-  } else {
-    searchResult = await putGithubFile(
-      indexRepoFullName,
-      indexDefaultBranch,
-      SEARCH_INDEX_PATH,
-      stableJson(searchIndex),
-      "AVDC: atualizar índice simples de busca",
-      token
-    );
-  }
+  const searchResult = await putGithubFile(
+    indexRepoFullName,
+    indexDefaultBranch,
+    SEARCH_INDEX_PATH,
+    stableJson(searchIndex),
+    "AVDC: atualizar índice simples de busca",
+    token
+  );
 
   let extractionReportResult = null;
 
@@ -692,7 +611,6 @@ async function writeIndexFilesToGithub({
     manifestResult,
     catalogResult,
     searchResult,
-    semanticSearchResult,
     extractionReportResult
   };
 }
@@ -973,12 +891,11 @@ router.get("/search", async (req, res) => {
   }
 });
 
-async function prepareIndex(req, res) {
+router.post("/prepare", async (req, res) => {
   const userId = req.session.user.id;
   const sortMode = normalizeSortMode(req.body.sortMode);
   const filters = req.body.filters || {};
   const writeExtractionReport = req.body.writeExtractionReport === true;
-  const semanticMode = req.body.mode === "semantic";
   const filterExtensions = Array.isArray(filters.extensions) && filters.extensions.length > 0 ? new Set(filters.extensions.map(e => String(e).toLowerCase())) : null;
   const filterDirectories = Array.isArray(filters.directories) && filters.directories.length > 0 ? filters.directories.map(d => String(d).toLowerCase()) : null;
   const filterMinBytes = filters.minSizeKB ? Number(filters.minSizeKB) * 1024 : 0;
@@ -1133,8 +1050,7 @@ async function prepareIndex(req, res) {
       runId,
       files,
       createdAt: discoveredAt,
-      writeExtractionReport,
-      semanticMode
+      writeExtractionReport
     });
 
     const finishedAt = new Date().toISOString();
@@ -1176,13 +1092,10 @@ async function prepareIndex(req, res) {
         indexWritten: true,
         indexManifestPath: MANIFEST_PATH,
         indexCatalogPath: CATALOG_PATH,
-        mode: semanticMode ? "semantic" : "simple",
-        indexSearchPath: semanticMode ? null : SEARCH_INDEX_PATH,
-        indexSemanticSearchPath: semanticMode ? SEMANTIC_SEARCH_INDEX_PATH : null,
+        indexSearchPath: SEARCH_INDEX_PATH,
         indexManifestCommitSha: writeResult.manifestResult.commitSha,
         indexCatalogCommitSha: writeResult.catalogResult.commitSha,
-        indexSearchCommitSha: writeResult.searchResult?.commitSha || null,
-        indexSemanticSearchCommitSha: writeResult.semanticSearchResult?.commitSha || null,
+        indexSearchCommitSha: writeResult.searchResult.commitSha,
         extractionReportEnabled: writeExtractionReport,
         extractionReportPath: writeExtractionReport ? EXTRACTION_REPORT_PATH : null,
         extractionReportCommitSha: writeResult.extractionReportResult?.commitSha || null,
@@ -1193,8 +1106,7 @@ async function prepareIndex(req, res) {
       content: {
         tried: triedContentCount,
         indexed: contentIndexedCount,
-        withoutContent: files.length - contentIndexedCount,
-        semanticFiles: semanticMode ? buildSemanticSearchableFiles(files).length : 0
+        withoutContent: files.length - contentIndexedCount
       },
       extractionDetails,
       extractionReport: {
@@ -1213,14 +1125,8 @@ async function prepareIndex(req, res) {
       error: error.message || "Erro ao preparar catálogo do índice."
     });
   }
-}
-
-router.post("/prepare", prepareIndex);
-
-router.post("/prepare-semantic", (req, res) => {
-  req.body = { ...(req.body || {}), mode: "semantic" };
-  return prepareIndex(req, res);
 });
+
 
 router.get("/scan", async (req, res) => {
   try {
