@@ -1,10 +1,10 @@
-# AVDC v4.1 - Base Consolidada
+# AVDC v4.2 - Base Consolidada
 
 **Seu repositório. Seu banco de dados. Seu arsenal. Sua própria inteligência.**
 
 O AVDC transforma repositórios de código, fontes e documentos técnicos em uma base de conhecimento pesquisável, mantendo os dados originais preservados e o índice separado, controlado pelo próprio usuário.
 
-## Escopo consolidado da v4.1
+## Escopo consolidado da v4.2
 
 Esta versão consolida a base funcional do AVDC:
 
@@ -117,7 +117,7 @@ A V4.1 não precisa editar, excluir, listar, categorizar ou anexar arquivos às 
 
 A partir desta base consolidada, a próxima fase pode ser tratada como:
 
-**AVDC v4.1 - Inteligência do Índice**
+**AVDC v4.2 - Inteligência do Índice**
 
 Sugestões para as próximas versões:
 

@@ -483,6 +483,110 @@ async function writeIndexFilesToGithub({
   };
 }
 
+// ===== Fase 1: leitura do índice direto do GitHub do cliente =====
+// Premissa: nenhum dado do cliente no nosso banco. Catálogo e busca são lidos
+// dos JSON gravados em /avdc-index/ no repositório de índice do próprio cliente.
+
+async function fetchIndexJson(indexRepoFullName, branch, filePath, token) {
+  const encodedPath = String(filePath || "")
+    .split("/")
+    .map(part => encodeURIComponent(part))
+    .join("/");
+
+  const url = `https://api.github.com/repos/${indexRepoFullName}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`;
+
+  const response = await fetch(url, { headers: githubHeaders(token) });
+
+  if (response.status === 404) return null;
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = data.message || `Erro ao ler ${filePath} no GitHub`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.details = data;
+    throw error;
+  }
+
+  if (!data.content) return null;
+
+  try {
+    return JSON.parse(fromBase64(String(data.content).replace(/\n/g, "")));
+  } catch (parseError) {
+    const error = new Error(`Conteúdo de ${filePath} não é JSON válido.`);
+    error.status = 502;
+    throw error;
+  }
+}
+
+// Resolve o repositório de índice e o branch padrão dele para um usuário.
+async function resolveIndexRepo(config, token) {
+  const indexRepoFullName = config.selectedIndexRepoFullName || null;
+
+  if (!indexRepoFullName) return null;
+
+  const indexRepo = await fetchGithubJson(`https://api.github.com/repos/${indexRepoFullName}`, token);
+  const branch = indexRepo.default_branch || "main";
+
+  return { indexRepoFullName, branch };
+}
+
+// Carrega catalog.json e search-index.json do GitHub do cliente.
+async function loadIndexFromGithub(config, token) {
+  const resolved = await resolveIndexRepo(config, token);
+
+  if (!resolved) return { catalog: null, searchIndex: null };
+
+  const { indexRepoFullName, branch } = resolved;
+
+  const [catalog, searchIndex] = await Promise.all([
+    fetchIndexJson(indexRepoFullName, branch, CATALOG_PATH, token),
+    fetchIndexJson(indexRepoFullName, branch, SEARCH_INDEX_PATH, token)
+  ]);
+
+  return { catalog, searchIndex, indexRepoFullName, branch };
+}
+
+// Ordena os arquivos do catálogo conforme o modo escolhido.
+function sortCatalogFiles(files, sortMode) {
+  const list = Array.isArray(files) ? files.slice() : [];
+
+  if (sortMode === "updated_desc") {
+    return list.sort((a, b) => {
+      const da = a.displayDate || a.githubUpdatedAt || a.discoveredAt || "";
+      const db = b.displayDate || b.githubUpdatedAt || b.discoveredAt || "";
+      if (da && db && da !== db) return db.localeCompare(da);
+      return String(a.path || "").toLowerCase().localeCompare(String(b.path || "").toLowerCase());
+    });
+  }
+
+  return list.sort((a, b) =>
+    String(a.path || "").toLowerCase().localeCompare(String(b.path || "").toLowerCase())
+  );
+}
+
+// Pontua um arquivo do search-index (formato { name, path, extension, text, preview }).
+function scoreIndexFile(file, terms) {
+  const haystackName = normalizeText(`${file.name || ""} ${file.path || ""} ${file.extension || ""}`);
+  const haystackContent = normalizeText(file.text || "");
+
+  let score = 0;
+
+  for (const term of terms) {
+    if (haystackName.includes(term)) score += 8;
+    if (haystackContent.includes(term)) score += 3;
+  }
+
+  if (terms.length > 1) {
+    const phrase = terms.join(" ");
+    if (haystackContent.includes(phrase)) score += 12;
+    if (haystackName.includes(phrase)) score += 15;
+  }
+
+  return score;
+}
+
 function mapRun(row) {
   if (!row) return null;
 
@@ -559,45 +663,48 @@ router.get("/latest", async (req, res) => {
     const userId = req.session.user.id;
     const config = await getUserGithubConfig(userId);
     const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
+    const selectedIndexRepoFullName = config?.selectedIndexRepoFullName || null;
 
-    if (!selectedDataRepoFullName) {
-      return res.json({
-        ok: true,
-        selectedRepoFullName: null,
-        selectedDataRepoFullName: null,
-        selectedIndexRepoFullName: config?.selectedIndexRepoFullName || null,
-        run: null,
-        files: []
-      });
+    const emptyResponse = {
+      ok: true,
+      selectedRepoFullName: selectedDataRepoFullName,
+      selectedDataRepoFullName,
+      selectedIndexRepoFullName,
+      run: null,
+      files: []
+    };
+
+    if (!selectedDataRepoFullName || !selectedIndexRepoFullName || !config?.githubToken) {
+      return res.json(emptyResponse);
     }
 
     const sortMode = normalizeSortMode(req.query.sortMode);
-    const run = await getLatestRun(userId, selectedDataRepoFullName);
+    const { catalog } = await loadIndexFromGithub(config, config.githubToken);
 
-    if (!run) {
-      return res.json({
-        ok: true,
-        selectedRepoFullName: selectedDataRepoFullName,
-        selectedDataRepoFullName,
-        selectedIndexRepoFullName: config.selectedIndexRepoFullName || null,
-        run: null,
-        files: []
-      });
+    if (!catalog || !Array.isArray(catalog.files)) {
+      return res.json(emptyResponse);
     }
 
-    const files = await getFilesForRun(run.id, sortMode);
+    const files = sortCatalogFiles(catalog.files, sortMode).slice(0, 500);
 
     res.json({
       ok: true,
       selectedRepoFullName: selectedDataRepoFullName,
       selectedDataRepoFullName,
-      selectedIndexRepoFullName: config.selectedIndexRepoFullName || null,
-      run: mapRun(run),
-      files: files.map(mapFile)
+      selectedIndexRepoFullName,
+      run: {
+        repoFullName: selectedDataRepoFullName,
+        indexRepoFullName: selectedIndexRepoFullName,
+        sortMode,
+        filesCount: catalog.files.length,
+        generatedAt: catalog.generatedAt || null,
+        createdAt: catalog.generatedAt || null
+      },
+      files
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Erro ao carregar catálogo do índice." });
+    res.status(error.status || 500).json({ error: error.message || "Erro ao carregar catálogo do índice." });
   }
 });
 
@@ -607,27 +714,38 @@ router.get("/files", async (req, res) => {
     const sortMode = normalizeSortMode(req.query.sortMode);
     const config = await getUserGithubConfig(userId);
     const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
+    const selectedIndexRepoFullName = config?.selectedIndexRepoFullName || null;
 
     if (!selectedDataRepoFullName) {
       return res.status(400).json({ error: "Nenhum repositório de dados selecionado." });
     }
 
-    const run = await getLatestRun(userId, selectedDataRepoFullName);
-
-    if (!run) {
+    if (!selectedIndexRepoFullName || !config?.githubToken) {
       return res.json({ ok: true, run: null, files: [] });
     }
 
-    const files = await getFilesForRun(run.id, sortMode);
+    const { catalog } = await loadIndexFromGithub(config, config.githubToken);
+
+    if (!catalog || !Array.isArray(catalog.files)) {
+      return res.json({ ok: true, run: null, files: [] });
+    }
+
+    const files = sortCatalogFiles(catalog.files, sortMode).slice(0, 500);
 
     res.json({
       ok: true,
-      run: mapRun(run),
-      files: files.map(mapFile)
+      run: {
+        repoFullName: selectedDataRepoFullName,
+        indexRepoFullName: selectedIndexRepoFullName,
+        sortMode,
+        filesCount: catalog.files.length,
+        generatedAt: catalog.generatedAt || null
+      },
+      files
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Erro ao listar arquivos do catálogo." });
+    res.status(error.status || 500).json({ error: error.message || "Erro ao listar arquivos do catálogo." });
   }
 });
 
@@ -643,52 +761,46 @@ router.get("/search", async (req, res) => {
 
     const config = await getUserGithubConfig(userId);
     const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
+    const selectedIndexRepoFullName = config?.selectedIndexRepoFullName || null;
 
     if (!selectedDataRepoFullName) {
       return res.status(400).json({ error: "Nenhum repositório de dados selecionado." });
     }
 
-    const run = await getLatestRun(userId, selectedDataRepoFullName);
-
-    if (!run) {
-      return res.status(400).json({ error: "Nenhum catálogo criado ainda." });
+    if (!selectedIndexRepoFullName || !config?.githubToken) {
+      return res.status(400).json({ error: "Nenhum repositório de índice selecionado." });
     }
 
-    const rows = await getAll(`
-      SELECT *
-      FROM repo_index_files
-      WHERE run_id = $1
-    `, [run.id]);
+    const { searchIndex } = await loadIndexFromGithub(config, config.githubToken);
 
-    const scored = rows
-      .map(row => {
-        const score = scoreFile(row, terms);
-        return { row, score };
-      })
+    if (!searchIndex || !Array.isArray(searchIndex.files)) {
+      return res.status(400).json({ error: "Nenhum índice de busca encontrado. Crie o catálogo primeiro." });
+    }
+
+    const scored = searchIndex.files
+      .map(file => ({ file, score: scoreIndexFile(file, terms) }))
       .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score || String(a.row.path).localeCompare(String(b.row.path)))
+      .sort((a, b) => b.score - a.score || String(a.file.path).localeCompare(String(b.file.path)))
       .slice(0, 30);
 
     const results = scored.map(item => ({
-      id: item.row.id,
       score: item.score,
-      name: item.row.name,
-      path: item.row.path,
-      extension: item.row.extension,
-      githubUrl: item.row.github_url,
-      contentIndexed: Number(item.row.content_indexed || 0) === 1,
-      snippet: makeSnippet(item.row.content_text || item.row.content_preview || item.row.path, terms)
+      name: item.file.name,
+      path: item.file.path,
+      extension: item.file.extension,
+      githubUrl: item.file.githubUrl,
+      contentIndexed: true,
+      snippet: makeSnippet(item.file.text || item.file.preview || item.file.path, terms)
     }));
 
     res.json({
       ok: true,
       query: q,
-      run: mapRun(run),
       results
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Erro ao buscar no índice." });
+    res.status(error.status || 500).json({ error: error.message || "Erro ao buscar no índice." });
   }
 });
 
