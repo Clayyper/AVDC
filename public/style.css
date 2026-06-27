@@ -691,6 +691,30 @@ button {
 .btn-info:hover { background: #138496; }
 
 
+
+.catalog-options-row {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-support);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.inline-checkbox input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
 .catalog-actions-row {
   display: flex;
   align-items: center;
@@ -742,4 +766,31 @@ button {
   font-size: 14px;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   resize: vertical;
+}
+
+
+/* ===== AVDC v5.0: detalhes técnicos da execução ===== */
+.execution-technical-container {
+  margin-top: 12px;
+}
+
+.avdc-technical-summary {
+  border-style: dashed;
+}
+
+.technical-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.technical-item {
+  background: var(--bg-color);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.technical-item p {
+  margin-bottom: 6px;
 }

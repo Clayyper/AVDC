@@ -17,6 +17,9 @@ let cachedCatalogFiles = [];
 let catalogListVisible = false;
 let catalogPage = 1;
 let catalogTechnicalIgnoredCount = 0;
+let cachedExecutionDetails = [];
+let executionDetailsVisible = false;
+let executionDetailsPage = 1;
 
 const $ = (id) => document.getElementById(id);
 
@@ -529,6 +532,7 @@ function clearCatalogView() {
   catalogPage = 1;
   catalogTechnicalIgnoredCount = 0;
   if (box) box.innerHTML = "<p>Nenhum catálogo criado ainda.</p>";
+  renderExecutionTechnicalDetails([]);
 }
 
 function currentCatalogSortMode() {
@@ -568,6 +572,7 @@ async function refreshCatalogView() {
     }
 
     renderCatalogFiles(data.files || []);
+    renderExecutionTechnicalDetails([]);
     msg("catalog-msg", "Visualização atualizada.", "ok");
   } catch (err) {
     msg("catalog-msg", err.message, "error");
@@ -577,31 +582,114 @@ async function refreshCatalogView() {
 async function prepareCatalog() {
   try {
     const sortMode = currentCatalogSortMode();
+    const writeExtractionReport = !!$("catalog-write-extraction-report")?.checked;
 
     msg("catalog-msg", "Criando catálogo. Aguarde...", "ok");
 
     const data = await api("/api/index/prepare", {
       method: "POST",
-      body: JSON.stringify({ sortMode, filters: advancedFilters })
+      body: JSON.stringify({ sortMode, filters: advancedFilters, writeExtractionReport })
     });
 
     renderCatalogRun(data.run);
     renderCatalogFiles(data.files || []);
+    renderExecutionTechnicalDetails(data.extractionDetails || []);
 
-    let text = `Índice criado com ${data.run.filesCount} arquivo(s). Conteúdo extraído de ${data.content?.indexed ?? 0} arquivo(s).`;
+    let text = `Indexação concluída. Arquivos no catálogo: ${data.run.filesCount}. Conteúdo extraído: ${data.content?.indexed ?? 0}. Sem conteúdo extraído: ${data.content?.withoutContent ?? 0}.`;
 
     if (data.run.truncated) {
       text += " Atenção: o GitHub informou que a árvore foi truncada.";
     }
 
-    if (data.run.dateLookupLimit > 0) {
-      text += ` Datas de última alteração obtidas para ${data.run.dateLookupCount} arquivo(s), com limite de ${data.run.dateLookupLimit}. Quando a data do GitHub não vier, o AVDC mostra a data de descoberta no índice.`;
+    if (data.extractionReport?.written) {
+      text += ` Relatório técnico TXT salvo no GitHub em ${data.extractionReport.path}. Para visualizar novamente, acesse diretamente o repositório de índice no GitHub. Pela ferramenta, os detalhes só aparecem na execução atual; para ver de novo aqui, execute a indexação novamente.`;
     }
 
     msg("catalog-msg", text, "ok");
   } catch (err) {
     msg("catalog-msg", err.message, "error");
   }
+}
+
+function renderExecutionTechnicalDetails(details) {
+  const box = $("execution-technical-container");
+  if (!box) return;
+
+  cachedExecutionDetails = details || [];
+  executionDetailsVisible = false;
+  executionDetailsPage = 1;
+  renderExecutionTechnicalList();
+}
+
+function renderExecutionTechnicalList() {
+  const box = $("execution-technical-container");
+  if (!box) return;
+
+  const details = cachedExecutionDetails || [];
+  const total = details.length;
+
+  if (total === 0) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+
+  box.classList.remove("hidden");
+
+  const actionText = executionDetailsVisible ? "Ocultar detalhes técnicos" : "Ver detalhes técnicos desta execução";
+
+  if (!executionDetailsVisible) {
+    box.innerHTML = `
+      <div class="avdc-list-summary avdc-technical-summary">
+        <p><strong>Detalhes técnicos disponíveis somente nesta execução.</strong></p>
+        <p>${total} arquivo(s) sem conteúdo extraído.</p>
+        <button class="btn btn-secondary" type="button" onclick="toggleExecutionTechnicalDetails()">${actionText}</button>
+      </div>
+    `;
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / AVDC_PAGE_SIZE));
+  executionDetailsPage = Math.min(Math.max(executionDetailsPage, 1), totalPages);
+
+  const startIndex = (executionDetailsPage - 1) * AVDC_PAGE_SIZE;
+  const pageItems = details.slice(startIndex, startIndex + AVDC_PAGE_SIZE);
+  const from = startIndex + 1;
+  const to = Math.min(startIndex + pageItems.length, total);
+
+  box.innerHTML = `
+    <div class="avdc-list-summary avdc-technical-summary">
+      <p><strong>Detalhes técnicos disponíveis somente nesta execução.</strong></p>
+      <p>${total} arquivo(s) sem conteúdo extraído.</p>
+      <button class="btn btn-secondary" type="button" onclick="toggleExecutionTechnicalDetails()">${actionText}</button>
+    </div>
+
+    <div class="avdc-pagination-top">Mostrando ${from}–${to} de ${total} detalhe(s) técnico(s)</div>
+
+    <div class="technical-list">
+      ${pageItems.map(file => `
+        <div class="technical-item">
+          <p><strong>${escapeHTML(file.name || file.path || "-")}</strong></p>
+          <p class="code">${escapeHTML(file.path || "-")}</p>
+          <p><strong>Motivo:</strong> ${escapeHTML(file.reason || "Não informado")}</p>
+          <p><strong>Extensão:</strong> ${escapeHTML(file.extension || "sem extensão")} · <strong>Tamanho:</strong> ${formatBytes(file.sizeBytes)}</p>
+        </div>
+      `).join("")}
+    </div>
+
+    ${renderPaginationControls("technical", executionDetailsPage, totalPages)}
+  `;
+}
+
+function toggleExecutionTechnicalDetails() {
+  executionDetailsVisible = !executionDetailsVisible;
+  if (executionDetailsVisible) executionDetailsPage = 1;
+  renderExecutionTechnicalList();
+}
+
+function changeExecutionTechnicalPage(direction) {
+  executionDetailsPage += direction;
+  renderExecutionTechnicalList();
 }
 
 function renderCatalogRun(run) {
@@ -729,8 +817,16 @@ function changeCatalogPage(direction) {
 }
 
 function renderPaginationControls(type, currentPage, totalPages) {
-  const previousAction = type === "repo" ? "changeRepoPage(-1)" : "changeCatalogPage(-1)";
-  const nextAction = type === "repo" ? "changeRepoPage(1)" : "changeCatalogPage(1)";
+  const previousAction = type === "repo"
+    ? "changeRepoPage(-1)"
+    : type === "technical"
+      ? "changeExecutionTechnicalPage(-1)"
+      : "changeCatalogPage(-1)";
+  const nextAction = type === "repo"
+    ? "changeRepoPage(1)"
+    : type === "technical"
+      ? "changeExecutionTechnicalPage(1)"
+      : "changeCatalogPage(1)";
 
   return `
     <div class="avdc-pagination-controls">

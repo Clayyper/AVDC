@@ -13,6 +13,7 @@ const AVDC_INDEX_DIR = "avdc-index";
 const MANIFEST_PATH = `${AVDC_INDEX_DIR}/manifest.json`;
 const CATALOG_PATH = `${AVDC_INDEX_DIR}/catalog.json`;
 const SEARCH_INDEX_PATH = `${AVDC_INDEX_DIR}/search-index.json`;
+const EXTRACTION_REPORT_PATH = `${AVDC_INDEX_DIR}/extraction-report.txt`;
 
 const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 
@@ -220,6 +221,85 @@ function shouldTryExtractContent(file) {
   return true;
 }
 
+function extractionReason(file) {
+  if (!file || file.contentIndexed) return null;
+
+  const ext = String(file.extension || "").toLowerCase();
+  const size = Number(file.sizeBytes || 0);
+  const maxBytes = Number(process.env.AVDC_MAX_FILE_BYTES || DEFAULT_MAX_FILE_BYTES);
+
+  if (file.contentError) return file.contentError;
+  if (size === 0) return "Arquivo vazio";
+  if (size > maxBytes) return "Arquivo muito grande";
+  if (BINARY_EXTENSIONS.has(ext)) return "Extensão binária conhecida";
+  if (!ext) return "Tipo sem extensão sem conteúdo extraído";
+
+  return "Tipo ainda não suportado";
+}
+
+function buildExtractionDetails(files) {
+  return (files || [])
+    .filter(file => !file.contentIndexed)
+    .map(file => ({
+      path: file.path,
+      name: file.name,
+      extension: file.extension || "",
+      sizeBytes: file.sizeBytes,
+      githubUrl: file.githubUrl,
+      reason: extractionReason(file)
+    }));
+}
+
+function buildExtractionReportText({
+  dataRepoFullName,
+  dataDefaultBranch,
+  indexRepoFullName,
+  indexDefaultBranch,
+  runId,
+  files,
+  createdAt,
+  writeExtractionReport = false
+}) {
+  const details = buildExtractionDetails(files);
+  const indexedCount = (files || []).filter(file => file.contentIndexed).length;
+
+  const lines = [];
+  lines.push("AVDC v5.0 - Relatório técnico de extração");
+  lines.push("");
+  lines.push("Este relatório foi salvo no GitHub porque o usuário marcou essa opção antes da indexação.");
+  lines.push("Para visualizar este relatório novamente, acesse diretamente o repositório de índice no GitHub.");
+  lines.push("A ferramenta AVDC não reabre relatórios técnicos salvos; para ver os detalhes novamente pela interface, execute a indexação novamente.");
+  lines.push("");
+  lines.push(`Repositório de dados: ${dataRepoFullName || "-"}`);
+  lines.push(`Branch dos dados: ${dataDefaultBranch || "-"}`);
+  lines.push(`Repositório de índice: ${indexRepoFullName || "-"}`);
+  lines.push(`Branch do índice: ${indexDefaultBranch || "-"}`);
+  lines.push(`Execução: ${runId || "-"}`);
+  lines.push(`Gerado em: ${createdAt || "-"}`);
+  lines.push("");
+  lines.push(`Arquivos no catálogo: ${(files || []).length}`);
+  lines.push(`Conteúdo extraído: ${indexedCount}`);
+  lines.push(`Sem conteúdo extraído: ${details.length}`);
+  lines.push("");
+  lines.push("Arquivos sem conteúdo extraído");
+  lines.push("--------------------------------");
+
+  if (details.length === 0) {
+    lines.push("Nenhum arquivo sem conteúdo extraído nesta execução.");
+  } else {
+    details.forEach((file, index) => {
+      lines.push(`${index + 1}. ${file.path || file.name || "-"}`);
+      lines.push(`   Motivo: ${file.reason || "Não informado"}`);
+      lines.push(`   Extensão: ${file.extension || "sem extensão"}`);
+      lines.push(`   Tamanho: ${file.sizeBytes ?? "-"} bytes`);
+      if (file.githubUrl) lines.push(`   GitHub: ${file.githubUrl}`);
+      lines.push("");
+    });
+  }
+
+  return lines.join("\n");
+}
+
 function safePreview(text, max = 420) {
   return String(text || "")
     .replace(/\s+/g, " ")
@@ -345,7 +425,8 @@ async function writeIndexFilesToGithub({
   sortMode,
   runId,
   files,
-  createdAt
+  createdAt,
+  writeExtractionReport = false
 }) {
   const searchableFiles = files
     .filter(file => file.contentIndexed && file.contentText)
@@ -374,13 +455,15 @@ async function writeIndexFilesToGithub({
       indexDefaultBranch,
       manifestPath: MANIFEST_PATH,
       catalogPath: CATALOG_PATH,
-      searchIndexPath: SEARCH_INDEX_PATH
+      searchIndexPath: SEARCH_INDEX_PATH,
+      extractionReportPath: writeExtractionReport ? EXTRACTION_REPORT_PATH : null
     },
     run: {
       id: runId,
       sortMode,
       filesCount: files.length,
       searchableFilesCount: searchableFiles.length,
+      extractionReportEnabled: !!writeExtractionReport,
       createdAt
     }
   };
@@ -456,10 +539,34 @@ async function writeIndexFilesToGithub({
     token
   );
 
+  let extractionReportResult = null;
+
+  if (writeExtractionReport) {
+    const extractionReportText = buildExtractionReportText({
+      dataRepoFullName,
+      dataDefaultBranch,
+      indexRepoFullName,
+      indexDefaultBranch,
+      runId,
+      files,
+      createdAt
+    });
+
+    extractionReportResult = await putGithubFile(
+      indexRepoFullName,
+      indexDefaultBranch,
+      EXTRACTION_REPORT_PATH,
+      extractionReportText,
+      "AVDC: atualizar relatório técnico de extração",
+      token
+    );
+  }
+
   return {
     manifestResult,
     catalogResult,
-    searchResult
+    searchResult,
+    extractionReportResult
   };
 }
 
@@ -743,6 +850,7 @@ router.post("/prepare", async (req, res) => {
   const userId = req.session.user.id;
   const sortMode = normalizeSortMode(req.body.sortMode);
   const filters = req.body.filters || {};
+  const writeExtractionReport = req.body.writeExtractionReport === true;
   const filterExtensions = Array.isArray(filters.extensions) && filters.extensions.length > 0 ? new Set(filters.extensions.map(e => String(e).toLowerCase())) : null;
   const filterDirectories = Array.isArray(filters.directories) && filters.directories.length > 0 ? filters.directories.map(d => String(d).toLowerCase()) : null;
   const filterMinBytes = filters.minSizeKB ? Number(filters.minSizeKB) * 1024 : 0;
@@ -896,10 +1004,12 @@ router.post("/prepare", async (req, res) => {
       sortMode,
       runId,
       files,
-      createdAt: discoveredAt
+      createdAt: discoveredAt,
+      writeExtractionReport
     });
 
     const finishedAt = new Date().toISOString();
+    const extractionDetails = buildExtractionDetails(files);
 
     // Fase 2: nada de UPDATE no banco. A resposta é montada a partir da memória
     // e dos JSON recém-gravados no GitHub do cliente.
@@ -941,13 +1051,24 @@ router.post("/prepare", async (req, res) => {
         indexManifestCommitSha: writeResult.manifestResult.commitSha,
         indexCatalogCommitSha: writeResult.catalogResult.commitSha,
         indexSearchCommitSha: writeResult.searchResult.commitSha,
+        extractionReportEnabled: writeExtractionReport,
+        extractionReportPath: writeExtractionReport ? EXTRACTION_REPORT_PATH : null,
+        extractionReportCommitSha: writeResult.extractionReportResult?.commitSha || null,
         indexWrittenAt: finishedAt,
         finishedAt,
         createdAt: discoveredAt
       },
       content: {
         tried: triedContentCount,
-        indexed: contentIndexedCount
+        indexed: contentIndexedCount,
+        withoutContent: files.length - contentIndexedCount
+      },
+      extractionDetails,
+      extractionReport: {
+        requested: writeExtractionReport,
+        written: !!writeResult.extractionReportResult,
+        path: writeExtractionReport ? EXTRACTION_REPORT_PATH : null,
+        commitSha: writeResult.extractionReportResult?.commitSha || null
       },
       files: responseFiles
     });
