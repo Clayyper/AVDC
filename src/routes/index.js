@@ -14,7 +14,7 @@ const CATALOG_PATH = `${AVDC_INDEX_DIR}/catalog.json`;
 const SEARCH_INDEX_PATH = `${AVDC_INDEX_DIR}/search-index.json`;
 
 const DEFAULT_CONTENT_LIMIT = 80;
-const DEFAULT_MAX_FILE_BYTES = 1024 * 1024; // 1 MB
+const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 
 const TEXT_EXTENSIONS = new Set([
   "txt", "md", "markdown", "json", "csv", "tsv", "xml", "html", "htm", "css",
@@ -168,9 +168,11 @@ function shouldTryExtractContent(file) {
 
   /*
     Sem extensão ou extensão desconhecida:
-    tenta ler se o arquivo for pequeno.
+    usuário avançado, repositório de código —
+    tenta ler como texto dentro do limite geral.
+    fetchFileContent descarta se for binário (null byte).
   */
-  return size > 0 && size <= Math.min(maxBytes, 200 * 1024);
+  return size > 0;
 }
 
 function safePreview(text, max = 420) {
