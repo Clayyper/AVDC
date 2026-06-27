@@ -295,7 +295,7 @@ async function changeAdminPassword() {
 async function loadUserProfile() {
   try {
     const data = await api("/api/user/profile");
-    renderGithubStatus(data.github);
+    renderGithubStatus(data.github); renderRepositoryStatus(data.repository);
   } catch (err) {
     msg("github-msg", err.message, "error");
   }
@@ -345,6 +345,67 @@ async function disconnectGithub() {
   }
 }
 
+
+function renderRepositoryStatus(repository) {
+  const selected = repository?.selectedRepoFullName || null;
+  const label = $("selected-repo-label");
+
+  if (label) {
+    label.textContent = selected || "Nenhum";
+  }
+}
+
+async function loadRepos() {
+  try {
+    const data = await api("/auth/github/repos");
+    const box = $("repos-container");
+
+    if (!data.repos || data.repos.length === 0) {
+      box.innerHTML = "<p>Nenhum repositório encontrado.</p>";
+      return;
+    }
+
+    box.innerHTML = data.repos.map(repo => `
+      <div class="repo-item ${repo.active ? "repo-active" : ""}">
+        <div>
+          <p>
+            <strong>${escapeHTML(repo.fullName)}</strong>
+            ${repo.active ? '<span class="badge badge-ok">Ativo</span>' : ""}
+          </p>
+          <p>${repo.private ? "Privado" : "Público"} · branch padrão: ${escapeHTML(repo.defaultBranch || "-")}</p>
+          <p class="code">${escapeHTML(repo.htmlUrl || "")}</p>
+        </div>
+        <div>
+          <button class="btn" onclick="selectRepo('${escapeAttr(repo.fullName)}')">
+            ${repo.active ? "Selecionado" : "Usar este repositório"}
+          </button>
+        </div>
+      </div>
+    `).join("");
+
+    msg("repos-msg", "Repositórios carregados.", "ok");
+  } catch (err) {
+    msg("repos-msg", err.message, "error");
+  }
+}
+
+async function selectRepo(repoFullName) {
+  try {
+    const data = await api("/auth/github/repos/select", {
+      method: "POST",
+      body: JSON.stringify({ repoFullName })
+    });
+
+    msg("repos-msg", "Repositório ativo selecionado: " + data.selectedRepoFullName, "ok");
+
+    await loadUserProfile();
+    await loadRepos();
+  } catch (err) {
+    msg("repos-msg", err.message, "error");
+  }
+}
+
+
 function escapeHTML(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -391,6 +452,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btn-connect-github").onclick = connectGithub;
   $("btn-change-github").onclick = connectGithub;
   $("btn-disconnect-github").onclick = disconnectGithub;
+  $("btn-load-repos").onclick = loadRepos;
 
   const params = new URLSearchParams(location.search);
   if (params.get("github") === "connected") {

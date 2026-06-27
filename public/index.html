@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC v2.6 - GitHub Connect</title>
+<title>AVDC v2.7 - GitHub Connect</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">v2.6</div>
+  <div class="version-badge">v2.7</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -43,13 +43,13 @@
 
   <div class="note">
     <p><strong>Escopo desta versão:</strong></p>
-    <p>Usuário loga e conecta/desconecta/troca GitHub.</p>
-    <p>Ainda não lista repositórios.</p>
+    <p>Usuário conecta GitHub, lista repositórios e escolhe um repositório ativo.</p>
+    <p>Ainda não cria índice e ainda não faz busca.</p>
   </div>
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">v2.6</div>
+  <div class="version-badge">v2.7</div>
 
   <div class="header">
     <div>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">v2.6</div>
+  <div class="version-badge">v2.7</div>
 
   <div class="header">
     <div>
@@ -214,7 +214,24 @@
 
     <div class="note">
       <p>O GitHub conectado fica salvo no banco do usuário.</p>
-      <p>Na próxima etapa vamos listar os repositórios desta conta.</p>
+      <p>Agora já podemos listar os repositórios e escolher um repositório ativo.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Repositório ativo</h3>
+    <p>Escolha qual repositório será usado pelo AVDC como fonte de dados. Nesta versão o AVDC ainda não lê arquivos.</p>
+
+    <div class="note">
+      <p><strong>Selecionado:</strong> <span id="selected-repo-label" class="code">Nenhum</span></p>
+    </div>
+
+    <button class="btn" id="btn-load-repos">Listar repositórios</button>
+
+    <div id="repos-msg" class="msg"></div>
+
+    <div id="repos-container" class="repos-container">
+      <p>Conecte o GitHub e clique em listar repositórios.</p>
     </div>
   </div>
 </div>

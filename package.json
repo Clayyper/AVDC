@@ -1,7 +1,7 @@
 {
   "name": "avdc-admin-db-v2-3",
-  "version": "2.6.0",
-  "description": "AVDC v2.6 - PostgreSQL + conexão GitHub do usuário",
+  "version": "2.7.0",
+  "description": "AVDC v2.7 - Listar e selecionar repositório GitHub ativo",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

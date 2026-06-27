@@ -45,8 +45,10 @@ router.get("/profile", async (req, res) => {
         avatarUrl: config?.githubAvatarUrl || null,
         connectedAt: config?.githubConnectedAt || null
       },
+      repository: {
+        selectedRepoFullName: config?.selectedRepoFullName || null
+      },
       future: {
-        selectedRepoFullName: config?.selectedRepoFullName || null,
         indexPath: config?.indexPath || null,
         aiSite: config?.aiSite || null
       }

@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 
-const { query } = require("../db");
+const { query, getOne } = require("../db");
 const { requireUser } = require("../middleware");
 
 const router = express.Router();
@@ -14,11 +14,6 @@ function githubConfigured() {
   );
 }
 
-/*
-  Etapa 1:
-  Usuário clica em Conectar GitHub.
-  O AVDC manda o usuário para a tela de autorização do GitHub.
-*/
 router.get("/connect", requireUser, (req, res) => {
   if (!githubConfigured()) {
     return res.status(500).send(`
@@ -34,18 +29,13 @@ router.get("/connect", requireUser, (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID,
     redirect_uri: process.env.GITHUB_CALLBACK_URL,
-    scope: "read:user",
+    scope: "read:user repo",
     state
   });
 
   res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
 });
 
-/*
-  Etapa 2:
-  GitHub retorna para o AVDC.
-  O AVDC troca o "code" por access_token e busca o perfil do GitHub.
-*/
 router.get("/callback", requireUser, async (req, res) => {
   const { code, state } = req.query;
 
@@ -87,7 +77,8 @@ router.get("/callback", requireUser, async (req, res) => {
     const profileResponse = await fetch("https://api.github.com/user", {
       headers: {
         "Authorization": `Bearer ${tokenData.access_token}`,
-        "User-Agent": "AVDC"
+        "User-Agent": "AVDC",
+        "Accept": "application/vnd.github+json"
       }
     });
 
@@ -128,11 +119,128 @@ router.get("/callback", requireUser, async (req, res) => {
   }
 });
 
-/*
-  Desconectar GitHub:
-  Remove a conexão do cadastro do usuário.
-  Não apaga o usuário.
-*/
+router.get("/repos", requireUser, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const config = await getOne(`
+      SELECT
+        github_connected AS "githubConnected",
+        github_token_encrypted AS "githubToken",
+        selected_repo_full_name AS "selectedRepoFullName"
+      FROM user_future_config
+      WHERE user_id = $1
+    `, [userId]);
+
+    if (!config || Number(config.githubConnected) !== 1 || !config.githubToken) {
+      return res.status(400).json({
+        error: "GitHub não conectado para este usuário."
+      });
+    }
+
+    const response = await fetch("https://api.github.com/user/repos?per_page=100&sort=updated&type=all", {
+      headers: {
+        "Authorization": `Bearer ${config.githubToken}`,
+        "User-Agent": "AVDC",
+        "Accept": "application/vnd.github+json"
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: "Erro ao listar repositórios do GitHub.",
+        details: data
+      });
+    }
+
+    const repos = data.map(repo => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      private: repo.private,
+      htmlUrl: repo.html_url,
+      defaultBranch: repo.default_branch,
+      updatedAt: repo.updated_at,
+      owner: repo.owner?.login || "",
+      active: repo.full_name === config.selectedRepoFullName
+    }));
+
+    res.json({
+      ok: true,
+      selectedRepoFullName: config.selectedRepoFullName || null,
+      repos
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Erro interno ao listar repositórios."
+    });
+  }
+});
+
+router.post("/repos/select", requireUser, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const repoFullName = String(req.body.repoFullName || "").trim();
+
+    if (!repoFullName || !repoFullName.includes("/")) {
+      return res.status(400).json({
+        error: "Repositório inválido."
+      });
+    }
+
+    const config = await getOne(`
+      SELECT
+        github_connected AS "githubConnected",
+        github_token_encrypted AS "githubToken"
+      FROM user_future_config
+      WHERE user_id = $1
+    `, [userId]);
+
+    if (!config || Number(config.githubConnected) !== 1 || !config.githubToken) {
+      return res.status(400).json({
+        error: "GitHub não conectado para este usuário."
+      });
+    }
+
+    const checkResponse = await fetch(`https://api.github.com/repos/${repoFullName}`, {
+      headers: {
+        "Authorization": `Bearer ${config.githubToken}`,
+        "User-Agent": "AVDC",
+        "Accept": "application/vnd.github+json"
+      }
+    });
+
+    if (!checkResponse.ok) {
+      return res.status(400).json({
+        error: "Este repositório não está acessível para a conta GitHub conectada."
+      });
+    }
+
+    const now = new Date().toISOString();
+
+    await query(`
+      UPDATE user_future_config
+      SET
+        selected_repo_full_name = $1,
+        updated_at = $2
+      WHERE user_id = $3
+    `, [repoFullName, now, userId]);
+
+    res.json({
+      ok: true,
+      selectedRepoFullName: repoFullName
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Erro interno ao selecionar repositório."
+    });
+  }
+});
+
 router.post("/disconnect", requireUser, async (req, res) => {
   try {
     const userId = req.session.user.id;
