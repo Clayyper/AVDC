@@ -16,6 +16,19 @@ const SEARCH_INDEX_PATH = `${AVDC_INDEX_DIR}/search-index.json`;
 const EXTRACTION_REPORT_PATH = `${AVDC_INDEX_DIR}/extraction-report.txt`;
 
 const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
+const DEFAULT_MAX_TEXT_CHARS = 40000;
+const DEFAULT_MAX_SEARCH_TEXT_CHARS = 12000;
+const DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS = 4 * 1024 * 1024; // ~4 MB de texto antes do JSON/base64
+const GITHUB_WRITE_RETRY_STATUSES = new Set([502, 503, 504]);
+
+function envNumber(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 const TEXT_EXTENSIONS = new Set([
   "txt", "md", "markdown", "json", "csv", "tsv", "xml", "html", "htm", "css",
@@ -345,7 +358,6 @@ async function getExistingContentSha(repoFullName, path, token) {
 
 async function putGithubFile(repoFullName, branch, path, content, message, token) {
   const existingSha = await getExistingContentSha(repoFullName, path, token);
-
   const body = {
     message,
     content: toBase64(content),
@@ -354,30 +366,44 @@ async function putGithubFile(repoFullName, branch, path, content, message, token
 
   if (existingSha) body.sha = existingSha;
 
-  const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents/${path}`, {
-    method: "PUT",
-    headers: {
-      ...githubHeaders(token),
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
+  const payload = JSON.stringify(body);
+  const maxAttempts = 3;
+  let lastError = null;
 
-  const data = await response.json().catch(() => ({}));
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents/${path}`, {
+      method: "PUT",
+      headers: {
+        ...githubHeaders(token),
+        "Content-Type": "application/json"
+      },
+      body: payload
+    });
 
-  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+
+    if (response.ok) {
+      return {
+        contentSha: data.content?.sha || null,
+        commitSha: data.commit?.sha || null,
+        htmlUrl: data.content?.html_url || null
+      };
+    }
+
     const messageText = data.message || `Erro ao gravar ${path} no GitHub`;
-    const error = new Error(messageText);
-    error.status = response.status;
-    error.details = data;
-    throw error;
+    lastError = new Error(messageText);
+    lastError.status = response.status;
+    lastError.details = data;
+
+    if (!GITHUB_WRITE_RETRY_STATUSES.has(response.status) || attempt === maxAttempts) {
+      break;
+    }
+
+    console.warn(`[AVDC] GitHub retornou ${response.status} ao gravar ${path}. Tentativa ${attempt}/${maxAttempts}. Repetindo...`);
+    await sleep(700 * attempt);
   }
 
-  return {
-    contentSha: data.content?.sha || null,
-    commitSha: data.commit?.sha || null,
-    htmlUrl: data.content?.html_url || null
-  };
+  throw lastError;
 }
 
 async function fetchFileContent(repoFullName, filePath, token) {
@@ -416,6 +442,32 @@ async function fetchFileContent(repoFullName, filePath, token) {
   };
 }
 
+function buildSearchableFiles(files) {
+  const maxPerFile = envNumber("AVDC_MAX_SEARCH_TEXT_CHARS", DEFAULT_MAX_SEARCH_TEXT_CHARS);
+  const maxTotal = envNumber("AVDC_MAX_SEARCH_INDEX_TOTAL_CHARS", DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS);
+  let used = 0;
+
+  return (files || [])
+    .filter(file => file.contentIndexed && file.contentText)
+    .map(file => {
+      const remaining = Math.max(0, maxTotal - used);
+      const limit = Math.min(maxPerFile, remaining);
+      const text = String(file.contentText || "").slice(0, limit);
+      used += text.length;
+
+      return {
+        path: file.path,
+        name: file.name,
+        extension: file.extension,
+        githubUrl: file.githubUrl,
+        preview: file.contentPreview,
+        text,
+        textTruncated: String(file.contentText || "").length > text.length
+      };
+    })
+    .filter(file => file.text.length > 0);
+}
+
 async function writeIndexFilesToGithub({
   token,
   indexRepoFullName,
@@ -428,20 +480,11 @@ async function writeIndexFilesToGithub({
   createdAt,
   writeExtractionReport = false
 }) {
-  const searchableFiles = files
-    .filter(file => file.contentIndexed && file.contentText)
-    .map(file => ({
-      path: file.path,
-      name: file.name,
-      extension: file.extension,
-      githubUrl: file.githubUrl,
-      preview: file.contentPreview,
-      text: file.contentText
-    }));
+  const searchableFiles = buildSearchableFiles(files);
 
   const manifest = {
     avdc: {
-      version: "3.1.0",
+      version: "5.0.6",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -463,6 +506,8 @@ async function writeIndexFilesToGithub({
       sortMode,
       filesCount: files.length,
       searchableFilesCount: searchableFiles.length,
+      searchIndexTextLimitPerFile: envNumber("AVDC_MAX_SEARCH_TEXT_CHARS", DEFAULT_MAX_SEARCH_TEXT_CHARS),
+      searchIndexTextLimitTotal: envNumber("AVDC_MAX_SEARCH_INDEX_TOTAL_CHARS", DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS),
       extractionReportEnabled: !!writeExtractionReport,
       createdAt
     }
@@ -470,7 +515,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "3.1.0",
+      version: "5.0.6",
       type: "catalog"
     },
     source: {
@@ -500,7 +545,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "3.1.0",
+      version: "5.0.6",
       type: "simple-search-index",
       note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
     },
@@ -977,7 +1022,7 @@ router.post("/prepare", async (req, res) => {
         const result = await fetchFileContent(repoFullName, file.path, token);
 
         if (result.text) {
-          file.contentText = result.text.slice(0, Number(process.env.AVDC_MAX_TEXT_CHARS || "200000"));
+          file.contentText = result.text.slice(0, envNumber("AVDC_MAX_TEXT_CHARS", DEFAULT_MAX_TEXT_CHARS));
           file.contentPreview = safePreview(file.contentText);
           file.contentIndexed = true;
           contentIndexedCount += 1;
