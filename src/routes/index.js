@@ -126,7 +126,7 @@ async function fetchLatestCommitDate(repoFullName, branch, filePath, token) {
 
     return null;
   } catch (error) {
-    console.warn("Não foi possível buscar data do arquivo:", filePath, error.message);
+    console.warn("[AVDC] Não foi possível buscar data de um arquivo.");
     return null;
   }
 }
@@ -200,11 +200,11 @@ function shouldTryExtractContent(file) {
   const maxBytes = Number(process.env.AVDC_MAX_FILE_BYTES || DEFAULT_MAX_FILE_BYTES);
 
   if (size > maxBytes) {
-    console.log(`[AVDC] IGNORADO (tamanho): ${file.name} | ext: "${ext}" | size: ${size} bytes`);
+    // Log sanitizado: não imprimir nome, path ou conteúdo do cliente.
     return false;
   }
   if (BINARY_EXTENSIONS.has(ext)) {
-    console.log(`[AVDC] IGNORADO (binário): ${file.name} | ext: "${ext}"`);
+    // Log sanitizado: não imprimir nome, path ou conteúdo do cliente.
     return false;
   }
   if (TEXT_EXTENSIONS.has(ext)) return true;
@@ -212,11 +212,11 @@ function shouldTryExtractContent(file) {
   // Sem extensão ou extensão desconhecida: tenta ler como texto.
   // fetchFileContent descarta se for binário (null byte).
   if (size === 0) {
-    console.log(`[AVDC] IGNORADO (vazio): ${file.name} | ext: "${ext}"`);
+    // Log sanitizado: não imprimir nome, path ou conteúdo do cliente.
     return false;
   }
 
-  console.log(`[AVDC] TENTANDO sem extensão conhecida: ${file.name} | ext: "${ext}" | size: ${size} bytes`);
+  // Log sanitizado: não imprimir nome, path ou conteúdo do cliente.
   return true;
 }
 

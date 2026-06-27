@@ -106,79 +106,18 @@ async function initDatabase() {
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_site TEXT;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_token_encrypted TEXT;`);
 
-  await query(`
-    CREATE TABLE IF NOT EXISTS repo_index_runs (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      repo_full_name TEXT NOT NULL,
-      default_branch TEXT,
-      sort_mode TEXT NOT NULL DEFAULT 'alpha',
-      status TEXT NOT NULL,
-      files_count INTEGER NOT NULL DEFAULT 0,
-      truncated INTEGER NOT NULL DEFAULT 0,
-      date_lookup_count INTEGER NOT NULL DEFAULT 0,
-      date_lookup_limit INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT,
-      started_at TIMESTAMPTZ NOT NULL,
-      finished_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL
-    );
-  `);
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS repo_index_files (
-      id SERIAL PRIMARY KEY,
-      run_id INTEGER NOT NULL REFERENCES repo_index_runs(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      repo_full_name TEXT NOT NULL,
-      default_branch TEXT,
-      path TEXT NOT NULL,
-      directory TEXT,
-      name TEXT NOT NULL,
-      extension TEXT,
-      github_type TEXT,
-      size_bytes BIGINT,
-      sha TEXT,
-      github_url TEXT,
-      github_created_at TIMESTAMPTZ,
-      github_updated_at TIMESTAMPTZ,
-      discovered_at TIMESTAMPTZ NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL
-    );
-  `);
-
-
   /*
-    v3.0.1 - Migração explícita para gravação do índice no GitHub.
-    Essas colunas ficam em repo_index_runs e registram onde o índice foi gravado.
+    v4.4 - Refactor de privacidade (Fase 3).
+    As tabelas repo_index_runs e repo_index_files foram REMOVIDAS.
+    Nenhum dado do cliente (path, nome, diretório, conteúdo, preview, erro) é
+    armazenado no nosso banco. O índice, catálogo e busca vivem exclusivamente
+    no GitHub do cliente, em /avdc-index/.
+    No nosso banco ficam apenas: admin_config, users, user_future_config
+    (login, token, conexão — dados nossos, de credencial).
+
+    O DROP das tabelas antigas é feito manualmente (ver scripts/drop-client-tables.sql),
+    pois o sistema não apaga dados automaticamente.
   */
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_repo_full_name TEXT;`);
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_written INTEGER NOT NULL DEFAULT 0;`);
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_manifest_path TEXT;`);
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_catalog_path TEXT;`);
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_manifest_commit_sha TEXT;`);
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_catalog_commit_sha TEXT;`);
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_written_at TIMESTAMPTZ;`);
-
-  await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_runs_user_repo ON repo_index_runs(user_id, repo_full_name, created_at DESC);`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_path ON repo_index_files(run_id, lower(path));`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_ext ON repo_index_files(run_id, extension);`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_updated ON repo_index_files(run_id, github_updated_at DESC NULLS LAST);`);
-  /*
-    v3.1 - Campos simples para busca por conteúdo extraído.
-  */
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_search_path TEXT;`);
-  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_search_commit_sha TEXT;`);
-  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_indexed INTEGER NOT NULL DEFAULT 0;`);
-  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_text TEXT;`);
-  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_preview TEXT;`);
-  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_error TEXT;`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_content_search ON repo_index_files USING GIN (to_tsvector('simple', coalesce(path,'') || ' ' || coalesce(name,'') || ' ' || coalesce(content_text,'')));`);
-
-
-
 
   const admin = await getOne("SELECT id FROM admin_config WHERE id = 1");
 
