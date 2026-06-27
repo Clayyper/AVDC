@@ -456,3 +456,30 @@ button {
     justify-content: flex-start;
   }
 }
+
+
+.search-results {
+  margin-top: 14px;
+}
+
+.search-item {
+  background: var(--bg-color);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.search-item p {
+  margin: 4px 0;
+}
+
+@media(max-width:780px) {
+  .search-item {
+    grid-template-columns: 1fr;
+  }
+}

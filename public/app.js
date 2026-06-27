@@ -509,7 +509,7 @@ async function prepareCatalog() {
     renderCatalogRun(data.run);
     renderCatalogFiles(data.files || []);
 
-    let text = `Catálogo criado com ${data.run.filesCount} arquivo(s) e gravado no repositório de índice.`;
+    let text = `Índice criado com ${data.run.filesCount} arquivo(s). Conteúdo extraído de ${data.content?.indexed ?? 0} arquivo(s).`;
 
     if (data.run.truncated) {
       text += " Atenção: o GitHub informou que a árvore foi truncada.";
@@ -596,6 +596,51 @@ function formatBytes(value) {
 }
 
 
+
+async function searchIndex() {
+  try {
+    const q = $("search-query").value.trim();
+
+    if (!q) {
+      msg("search-msg", "Digite um termo para buscar.", "error");
+      return;
+    }
+
+    const data = await api(`/api/index/search?q=${encodeURIComponent(q)}`);
+    renderSearchResults(data.results || []);
+
+    msg("search-msg", `${(data.results || []).length} resultado(s) encontrado(s).`, "ok");
+  } catch (err) {
+    msg("search-msg", err.message, "error");
+  }
+}
+
+function renderSearchResults(results) {
+  const box = $("search-results");
+
+  if (!box) return;
+
+  if (!results || results.length === 0) {
+    box.innerHTML = "<p>Nenhum resultado encontrado.</p>";
+    return;
+  }
+
+  box.innerHTML = results.map(result => `
+    <div class="search-item">
+      <div>
+        <p><strong>${escapeHTML(result.name || "-")}</strong> <span class="badge">${escapeHTML(result.extension || "sem extensão")}</span></p>
+        <p class="code">${escapeHTML(result.path || "-")}</p>
+        <p>${escapeHTML(result.snippet || "Resultado encontrado pelo nome ou caminho do arquivo.")}</p>
+        <p>${result.contentIndexed ? "Conteúdo pesquisável" : "Resultado pelo nome/caminho"}</p>
+      </div>
+      <div>
+        <a class="btn btn-secondary" href="${escapeAttr(result.githubUrl || "#")}" target="_blank" rel="noopener noreferrer">Abrir arquivo</a>
+      </div>
+    </div>
+  `).join("");
+}
+
+
 function escapeHTML(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -646,6 +691,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btn-prepare-catalog").onclick = prepareCatalog;
   $("btn-refresh-catalog").onclick = refreshCatalogView;
   $("catalog-sort-mode").onchange = refreshCatalogView;
+  $("btn-search-index").onclick = searchIndex;
+  $("search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchIndex(); });
 
   const params = new URLSearchParams(location.search);
   if (params.get("github") === "connected") {

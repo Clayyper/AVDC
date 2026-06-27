@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC v3.0 - Catálogo do Índice</title>
+<title>AVDC v3.1 - Catálogo do Índice</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">v3.0</div>
+  <div class="version-badge">v3.1</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -43,13 +43,13 @@
 
   <div class="note">
     <p><strong>Escopo desta versão:</strong></p>
-    <p>Usuário escolhe repositórios e grava o catálogo no repositório de índice.</p>
-    <p>Grava o índice em /avdc-index/ e ignora essa pasta na catalogação.</p>
+    <p>Usuário cria índice e busca por nome, caminho e conteúdo extraído.</p>
+    <p>Grava catálogo e índice simples em /avdc-index/ e permite busca básica.</p>
   </div>
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">v3.0</div>
+  <div class="version-badge">v3.1</div>
 
   <div class="header">
     <div>
@@ -160,7 +160,7 @@
             <p><strong>Etapa 2:</strong> Login do usuário comum. OK.</p>
             <p><strong>Etapa 3:</strong> Conexão GitHub do usuário. Esta versão.</p>
             <p><strong>Etapa 4:</strong> Escolha de repositório.</p>
-            <p><strong>Etapa 5:</strong> Gravar catálogo no repositório de índice. Esta versão.</p><p><strong>Etapa 6:</strong> Busca simples no catálogo e no conteúdo extraído.</p>
+            <p><strong>Etapa 5:</strong> Busca simples no catálogo e no conteúdo extraído. Esta versão.</p><p><strong>Etapa 6:</strong> Estruturação avançada e IA opcional.</p>
           </div>
         </div>
       </section>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">v3.0</div>
+  <div class="version-badge">v3.1</div>
 
   <div class="header">
     <div>
@@ -240,7 +240,7 @@
 
   <div class="card">
     <h3>Catálogo inicial do índice</h3>
-    <p>Esta etapa cria uma lista organizada dos arquivos do repositório de dados e grava o resultado no repositório de índice, dentro de /avdc-index/.</p>
+    <p>Esta etapa cria uma lista organizada dos arquivos, tenta extrair texto simples quando possível e grava o resultado no repositório de índice, dentro de /avdc-index/.</p>
 
     <div class="form-grid">
       <div>
@@ -270,6 +270,27 @@
 
     <div id="catalog-container" class="catalog-container">
       <p>Nenhum catálogo criado ainda.</p>
+    </div>
+  </div>
+
+
+  <div class="card">
+    <h3>Busca simples</h3>
+    <p>Busca por nome, caminho e texto extraído dos arquivos quando o AVDC conseguir ler. Ainda não usa IA.</p>
+
+    <div class="form-grid">
+      <div>
+        <label>Termo de busca</label>
+        <input type="text" id="search-query" placeholder="Ex.: progress, cliente, função, cálculo..." />
+      </div>
+    </div>
+
+    <button class="btn btn-success" id="btn-search-index">Buscar</button>
+
+    <div id="search-msg" class="msg"></div>
+
+    <div id="search-results" class="search-results">
+      <p>Crie o índice e faça uma busca.</p>
     </div>
   </div>
 

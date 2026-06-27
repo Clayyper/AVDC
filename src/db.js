@@ -166,6 +166,18 @@ async function initDatabase() {
   await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_path ON repo_index_files(run_id, lower(path));`);
   await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_ext ON repo_index_files(run_id, extension);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_updated ON repo_index_files(run_id, github_updated_at DESC NULLS LAST);`);
+  /*
+    v3.1 - Campos simples para busca por conteúdo extraído.
+  */
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_search_path TEXT;`);
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_search_commit_sha TEXT;`);
+  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_indexed INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_text TEXT;`);
+  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_preview TEXT;`);
+  await query(`ALTER TABLE repo_index_files ADD COLUMN IF NOT EXISTS content_error TEXT;`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_content_search ON repo_index_files USING GIN (to_tsvector('simple', coalesce(path,'') || ' ' || coalesce(name,'') || ' ' || coalesce(content_text,'')));`);
+
+
 
 
   const admin = await getOne("SELECT id FROM admin_config WHERE id = 1");
