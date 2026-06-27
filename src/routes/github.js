@@ -18,7 +18,8 @@ router.get("/connect", requireUser, (req, res) => {
   if (!githubConfigured()) {
     return res.status(500).send(`
       <h1>GitHub OAuth não configurado</h1>
-      <p>Configure GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET e GITHUB_CALLBACK_URL no Render.</p>
+      <p>A conexão GitHub ainda não foi configurada para esta instalação do AVDC.</p>
+      <p>O administrador da plataforma precisa configurar o OAuth App do AVDC.</p>
       <p><a href="/">Voltar</a></p>
     `);
   }
@@ -29,6 +30,11 @@ router.get("/connect", requireUser, (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID,
     redirect_uri: process.env.GITHUB_CALLBACK_URL,
+    /*
+      Para a arquitetura atual, o AVDC precisa listar repositórios privados
+      e, em versão futura, gravar arquivos no repositório de índice escolhido.
+      Em produção madura, o ideal será migrar para GitHub App com permissões granulares.
+    */
     scope: "read:user repo",
     state
   });
@@ -127,7 +133,9 @@ router.get("/repos", requireUser, async (req, res) => {
       SELECT
         github_connected AS "githubConnected",
         github_token_encrypted AS "githubToken",
-        selected_repo_full_name AS "selectedRepoFullName"
+        selected_repo_full_name AS "selectedRepoFullName",
+        selected_data_repo_full_name AS "selectedDataRepoFullName",
+        selected_index_repo_full_name AS "selectedIndexRepoFullName"
       FROM user_future_config
       WHERE user_id = $1
     `, [userId]);
@@ -155,6 +163,9 @@ router.get("/repos", requireUser, async (req, res) => {
       });
     }
 
+    const selectedData = config.selectedDataRepoFullName || config.selectedRepoFullName || null;
+    const selectedIndex = config.selectedIndexRepoFullName || null;
+
     const repos = data.map(repo => ({
       id: repo.id,
       name: repo.name,
@@ -164,12 +175,16 @@ router.get("/repos", requireUser, async (req, res) => {
       defaultBranch: repo.default_branch,
       updatedAt: repo.updated_at,
       owner: repo.owner?.login || "",
-      active: repo.full_name === config.selectedRepoFullName
+      isDataRepo: repo.full_name === selectedData,
+      isIndexRepo: repo.full_name === selectedIndex,
+      active: repo.full_name === selectedData
     }));
 
     res.json({
       ok: true,
-      selectedRepoFullName: config.selectedRepoFullName || null,
+      selectedRepoFullName: selectedData,
+      selectedDataRepoFullName: selectedData,
+      selectedIndexRepoFullName: selectedIndex,
       repos
     });
   } catch (error) {
@@ -180,7 +195,23 @@ router.get("/repos", requireUser, async (req, res) => {
   }
 });
 
-router.post("/repos/select", requireUser, async (req, res) => {
+async function ensureRepoAccessible(repoFullName, token) {
+  const checkResponse = await fetch(`https://api.github.com/repos/${repoFullName}`, {
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "User-Agent": "AVDC",
+      "Accept": "application/vnd.github+json"
+    }
+  });
+
+  if (!checkResponse.ok) {
+    return null;
+  }
+
+  return checkResponse.json();
+}
+
+async function selectRepoForPurpose(req, res, purpose) {
   try {
     const userId = req.session.user.id;
     const repoFullName = String(req.body.repoFullName || "").trim();
@@ -205,15 +236,9 @@ router.post("/repos/select", requireUser, async (req, res) => {
       });
     }
 
-    const checkResponse = await fetch(`https://api.github.com/repos/${repoFullName}`, {
-      headers: {
-        "Authorization": `Bearer ${config.githubToken}`,
-        "User-Agent": "AVDC",
-        "Accept": "application/vnd.github+json"
-      }
-    });
+    const repo = await ensureRepoAccessible(repoFullName, config.githubToken);
 
-    if (!checkResponse.ok) {
+    if (!repo) {
       return res.status(400).json({
         error: "Este repositório não está acessível para a conta GitHub conectada."
       });
@@ -221,17 +246,38 @@ router.post("/repos/select", requireUser, async (req, res) => {
 
     const now = new Date().toISOString();
 
+    if (purpose === "index") {
+      await query(`
+        UPDATE user_future_config
+        SET
+          selected_index_repo_full_name = $1,
+          updated_at = $2
+        WHERE user_id = $3
+      `, [repoFullName, now, userId]);
+
+      return res.json({
+        ok: true,
+        selectedIndexRepoFullName: repoFullName
+      });
+    }
+
+    /*
+      Compatibilidade:
+      mantemos selected_repo_full_name preenchido como alias do repositório de dados.
+    */
     await query(`
       UPDATE user_future_config
       SET
         selected_repo_full_name = $1,
+        selected_data_repo_full_name = $1,
         updated_at = $2
       WHERE user_id = $3
     `, [repoFullName, now, userId]);
 
     res.json({
       ok: true,
-      selectedRepoFullName: repoFullName
+      selectedRepoFullName: repoFullName,
+      selectedDataRepoFullName: repoFullName
     });
   } catch (error) {
     console.error(error);
@@ -239,6 +285,21 @@ router.post("/repos/select", requireUser, async (req, res) => {
       error: "Erro interno ao selecionar repositório."
     });
   }
+}
+
+router.post("/repos/select-data", requireUser, async (req, res) => {
+  await selectRepoForPurpose(req, res, "data");
+});
+
+router.post("/repos/select-index", requireUser, async (req, res) => {
+  await selectRepoForPurpose(req, res, "index");
+});
+
+/*
+  Rota antiga preservada: continua selecionando repositório de dados.
+*/
+router.post("/repos/select", requireUser, async (req, res) => {
+  await selectRepoForPurpose(req, res, "data");
 });
 
 router.post("/disconnect", requireUser, async (req, res) => {
@@ -256,6 +317,8 @@ router.post("/disconnect", requireUser, async (req, res) => {
         github_token_encrypted = NULL,
         github_connected_at = NULL,
         selected_repo_full_name = NULL,
+        selected_data_repo_full_name = NULL,
+        selected_index_repo_full_name = NULL,
         updated_at = $1
       WHERE user_id = $2
     `, [now, userId]);

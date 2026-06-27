@@ -30,6 +30,8 @@ router.get("/profile", async (req, res) => {
         github_avatar_url AS "githubAvatarUrl",
         github_connected_at AS "githubConnectedAt",
         selected_repo_full_name AS "selectedRepoFullName",
+        selected_data_repo_full_name AS "selectedDataRepoFullName",
+        selected_index_repo_full_name AS "selectedIndexRepoFullName",
         index_path AS "indexPath",
         ai_site AS "aiSite"
       FROM user_future_config
@@ -46,7 +48,9 @@ router.get("/profile", async (req, res) => {
         connectedAt: config?.githubConnectedAt || null
       },
       repository: {
-        selectedRepoFullName: config?.selectedRepoFullName || null
+        selectedRepoFullName: config?.selectedDataRepoFullName || config?.selectedRepoFullName || null,
+        selectedDataRepoFullName: config?.selectedDataRepoFullName || config?.selectedRepoFullName || null,
+        selectedIndexRepoFullName: config?.selectedIndexRepoFullName || null
       },
       future: {
         indexPath: config?.indexPath || null,

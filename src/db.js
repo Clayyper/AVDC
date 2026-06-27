@@ -88,6 +88,19 @@ async function initDatabase() {
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS github_avatar_url TEXT;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS github_connected_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS selected_repo_full_name TEXT;`);
+  await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS selected_data_repo_full_name TEXT;`);
+  await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS selected_index_repo_full_name TEXT;`);
+
+  /*
+    Compatibilidade com v2.7/v2.8:
+    o antigo selected_repo_full_name passa a ser entendido como repositório de dados.
+  */
+  await query(`
+    UPDATE user_future_config
+    SET selected_data_repo_full_name = selected_repo_full_name
+    WHERE selected_data_repo_full_name IS NULL
+      AND selected_repo_full_name IS NOT NULL
+  `);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS index_location TEXT;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS index_path TEXT;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_site TEXT;`);

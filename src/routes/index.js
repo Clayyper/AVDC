@@ -41,7 +41,9 @@ async function getUserGithubConfig(userId) {
     SELECT
       github_connected AS "githubConnected",
       github_token_encrypted AS "githubToken",
-      selected_repo_full_name AS "selectedRepoFullName"
+      selected_repo_full_name AS "selectedRepoFullName",
+      selected_data_repo_full_name AS "selectedDataRepoFullName",
+      selected_index_repo_full_name AS "selectedIndexRepoFullName"
     FROM user_future_config
     WHERE user_id = $1
   `, [userId]);
@@ -164,7 +166,9 @@ router.get("/latest", async (req, res) => {
     const userId = req.session.user.id;
     const config = await getUserGithubConfig(userId);
 
-    if (!config?.selectedRepoFullName) {
+    const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
+
+    if (!selectedDataRepoFullName) {
       return res.json({
         ok: true,
         selectedRepoFullName: null,
@@ -174,12 +178,14 @@ router.get("/latest", async (req, res) => {
     }
 
     const sortMode = normalizeSortMode(req.query.sortMode);
-    const run = await getLatestRun(userId, config.selectedRepoFullName);
+    const run = await getLatestRun(userId, selectedDataRepoFullName);
 
     if (!run) {
       return res.json({
         ok: true,
-        selectedRepoFullName: config.selectedRepoFullName,
+        selectedRepoFullName: selectedDataRepoFullName,
+        selectedDataRepoFullName,
+        selectedIndexRepoFullName: config.selectedIndexRepoFullName || null,
         run: null,
         files: []
       });
@@ -207,13 +213,15 @@ router.get("/files", async (req, res) => {
     const sortMode = normalizeSortMode(req.query.sortMode);
     const config = await getUserGithubConfig(userId);
 
-    if (!config?.selectedRepoFullName) {
+    const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
+
+    if (!selectedDataRepoFullName) {
       return res.status(400).json({
         error: "Nenhum repositório ativo selecionado."
       });
     }
 
-    const run = await getLatestRun(userId, config.selectedRepoFullName);
+    const run = await getLatestRun(userId, selectedDataRepoFullName);
 
     if (!run) {
       return res.json({
@@ -253,13 +261,15 @@ router.post("/prepare", async (req, res) => {
       });
     }
 
-    if (!config.selectedRepoFullName) {
+    const selectedDataRepoFullName = config.selectedDataRepoFullName || config.selectedRepoFullName || null;
+
+    if (!selectedDataRepoFullName) {
       return res.status(400).json({
         error: "Nenhum repositório ativo selecionado."
       });
     }
 
-    const repoFullName = config.selectedRepoFullName;
+    const repoFullName = selectedDataRepoFullName;
     const token = config.githubToken;
     const now = new Date().toISOString();
 

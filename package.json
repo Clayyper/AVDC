@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "2.8.0",
-  "description": "AVDC v2.8 - Catálogo inicial do índice do repositório ativo",
+  "version": "2.9.0",
+  "description": "AVDC v2.9 - Seleção separada de repositório de dados e repositório de índice",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

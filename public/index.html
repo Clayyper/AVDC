@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC v2.8 - Catálogo do Índice</title>
+<title>AVDC v2.9 - Catálogo do Índice</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">v2.8</div>
+  <div class="version-badge">v2.9</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -43,13 +43,13 @@
 
   <div class="note">
     <p><strong>Escopo desta versão:</strong></p>
-    <p>Usuário conecta GitHub, escolhe repositório e cria um catálogo inicial do índice.</p>
-    <p>Cria apenas o catálogo de arquivos. Ainda não baixa conteúdo e ainda não faz busca.</p>
+    <p>Usuário conecta GitHub, escolhe repositório de dados e escolhe repositório de índice.</p>
+    <p>Separa fonte de dados e local do índice. Ainda não grava arquivos no GitHub.</p>
   </div>
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">v2.8</div>
+  <div class="version-badge">v2.9</div>
 
   <div class="header">
     <div>
@@ -160,7 +160,7 @@
             <p><strong>Etapa 2:</strong> Login do usuário comum. OK.</p>
             <p><strong>Etapa 3:</strong> Conexão GitHub do usuário. Esta versão.</p>
             <p><strong>Etapa 4:</strong> Escolha de repositório.</p>
-            <p><strong>Etapa 5:</strong> Catálogo inicial do índice. Esta versão.</p><p><strong>Etapa 6:</strong> Leitura de conteúdo e busca.</p>
+            <p><strong>Etapa 5:</strong> Selecionar repositório de dados e repositório de índice. Esta versão.</p><p><strong>Etapa 6:</strong> Gravar catálogo no repositório de índice.</p>
           </div>
         </div>
       </section>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">v2.8</div>
+  <div class="version-badge">v2.9</div>
 
   <div class="header">
     <div>
@@ -219,11 +219,14 @@
   </div>
 
   <div class="card">
-    <h3>Repositório ativo</h3>
-    <p>Escolha qual repositório será usado pelo AVDC como fonte de dados. Nesta versão o AVDC ainda não lê arquivos.</p>
+    <h3>Repositórios do AVDC</h3>
+    <p>Escolha separadamente onde estão os dados originais e onde o AVDC poderá salvar o índice.</p>
 
     <div class="note">
-      <p><strong>Selecionado:</strong> <span id="selected-repo-label" class="code">Nenhum</span></p>
+      <p><strong>Repositório de dados:</strong> <span id="selected-data-repo-label" class="code">Nenhum</span></p>
+      <p>Fonte original do cliente. O AVDC deve tratar como leitura.</p>
+      <p><strong>Repositório de índice:</strong> <span id="selected-index-repo-label" class="code">Nenhum</span></p>
+      <p>Local escolhido pelo cliente para gravação futura dos arquivos de índice.</p>
     </div>
 
     <button class="btn" id="btn-load-repos">Listar repositórios</button>
@@ -256,7 +259,8 @@
     <div id="catalog-msg" class="msg"></div>
 
     <div class="note">
-      <p><strong>Repositório catalogado:</strong> <span id="catalog-repo-label" class="code">Nenhum</span></p>
+      <p><strong>Repositório de dados catalogado:</strong> <span id="catalog-repo-label" class="code">Nenhum</span></p>
+      <p><strong>Repositório de índice escolhido:</strong> <span id="catalog-index-repo-label" class="code">Nenhum</span></p>
       <p><strong>Status:</strong> <span id="catalog-status-label">Nenhum catálogo criado</span></p>
       <p><strong>Arquivos encontrados:</strong> <span id="catalog-files-count">0</span></p>
       <p><strong>Última execução:</strong> <span id="catalog-run-date">-</span></p>

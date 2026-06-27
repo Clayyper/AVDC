@@ -347,12 +347,16 @@ async function disconnectGithub() {
 
 
 function renderRepositoryStatus(repository) {
-  const selected = repository?.selectedRepoFullName || null;
-  const label = $("selected-repo-label");
+  const selectedData = repository?.selectedDataRepoFullName || repository?.selectedRepoFullName || null;
+  const selectedIndex = repository?.selectedIndexRepoFullName || null;
 
-  if (label) {
-    label.textContent = selected || "Nenhum";
-  }
+  const dataLabel = $("selected-data-repo-label");
+  const indexLabel = $("selected-index-repo-label");
+  const catalogIndexLabel = $("catalog-index-repo-label");
+
+  if (dataLabel) dataLabel.textContent = selectedData || "Nenhum";
+  if (indexLabel) indexLabel.textContent = selectedIndex || "Nenhum";
+  if (catalogIndexLabel) catalogIndexLabel.textContent = selectedIndex || "Nenhum";
 }
 
 async function loadRepos() {
@@ -366,18 +370,22 @@ async function loadRepos() {
     }
 
     box.innerHTML = data.repos.map(repo => `
-      <div class="repo-item ${repo.active ? "repo-active" : ""}">
+      <div class="repo-item ${repo.isDataRepo || repo.isIndexRepo ? "repo-active" : ""}">
         <div>
           <p>
             <strong>${escapeHTML(repo.fullName)}</strong>
-            ${repo.active ? '<span class="badge badge-ok">Ativo</span>' : ""}
+            ${repo.isDataRepo ? '<span class="badge badge-ok">Dados</span>' : ""}
+            ${repo.isIndexRepo ? '<span class="badge badge-ok">Índice</span>' : ""}
           </p>
           <p>${repo.private ? "Privado" : "Público"} · branch padrão: ${escapeHTML(repo.defaultBranch || "-")}</p>
           <p class="code">${escapeHTML(repo.htmlUrl || "")}</p>
         </div>
-        <div>
-          <button class="btn" onclick="selectRepo('${escapeAttr(repo.fullName)}')">
-            ${repo.active ? "Selecionado" : "Usar este repositório"}
+        <div class="repo-actions">
+          <button class="btn" onclick="selectDataRepo('${escapeAttr(repo.fullName)}')">
+            ${repo.isDataRepo ? "Fonte de dados" : "Usar como dados"}
+          </button>
+          <button class="btn btn-secondary" onclick="selectIndexRepo('${escapeAttr(repo.fullName)}')">
+            ${repo.isIndexRepo ? "Repo de índice" : "Usar como índice"}
           </button>
         </div>
       </div>
@@ -389,14 +397,32 @@ async function loadRepos() {
   }
 }
 
-async function selectRepo(repoFullName) {
+
+async function selectDataRepo(repoFullName) {
   try {
-    const data = await api("/auth/github/repos/select", {
+    const data = await api("/auth/github/repos/select-data", {
       method: "POST",
       body: JSON.stringify({ repoFullName })
     });
 
-    msg("repos-msg", "Repositório ativo selecionado: " + data.selectedRepoFullName, "ok");
+    msg("repos-msg", "Repositório de dados selecionado: " + data.selectedDataRepoFullName, "ok");
+
+    await loadUserProfile();
+    await loadRepos();
+    await loadLatestCatalog();
+  } catch (err) {
+    msg("repos-msg", err.message, "error");
+  }
+}
+
+async function selectIndexRepo(repoFullName) {
+  try {
+    const data = await api("/auth/github/repos/select-index", {
+      method: "POST",
+      body: JSON.stringify({ repoFullName })
+    });
+
+    msg("repos-msg", "Repositório de índice selecionado: " + data.selectedIndexRepoFullName, "ok");
 
     await loadUserProfile();
     await loadRepos();
@@ -414,11 +440,13 @@ function clearCatalogView() {
   const countLabel = $("catalog-files-count");
   const runDate = $("catalog-run-date");
   const box = $("catalog-container");
+  const indexRepoLabel = $("catalog-index-repo-label");
 
   if (repoLabel) repoLabel.textContent = "Nenhum";
   if (statusLabel) statusLabel.textContent = "Nenhum catálogo criado";
   if (countLabel) countLabel.textContent = "0";
   if (runDate) runDate.textContent = "-";
+  if (indexRepoLabel) indexRepoLabel.textContent = "Nenhum";
   if (box) box.innerHTML = "<p>Nenhum catálogo criado ainda.</p>";
 }
 
@@ -435,6 +463,9 @@ async function loadLatestCatalog() {
       clearCatalogView();
       if (data.selectedRepoFullName && $("catalog-repo-label")) {
         $("catalog-repo-label").textContent = data.selectedRepoFullName;
+      }
+      if (data.selectedIndexRepoFullName && $("catalog-index-repo-label")) {
+        $("catalog-index-repo-label").textContent = data.selectedIndexRepoFullName;
       }
       return;
     }

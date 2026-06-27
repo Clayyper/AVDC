@@ -442,3 +442,17 @@ button {
   opacity: 0.8;
   margin-top: 8px;
 }
+
+
+.repo-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media(max-width:780px) {
+  .repo-actions {
+    justify-content: flex-start;
+  }
+}
