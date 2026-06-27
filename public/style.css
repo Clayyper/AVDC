@@ -794,3 +794,16 @@ button {
 .technical-item p {
   margin-bottom: 6px;
 }
+
+
+.repo-warning {
+  margin-top: 6px;
+  color: #92400e;
+  font-size: 0.9rem;
+}
+
+button:disabled,
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

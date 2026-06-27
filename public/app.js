@@ -10,6 +10,7 @@ let advancedFilters = {
 let lastCreatedToken = "";
 
 const AVDC_PAGE_SIZE = 15;
+const AVDC_RESERVED_DATA_REPO_MESSAGE = "Este repositório parece ser técnico/de índice do AVDC. Ele pode ser usado como repositório de índice, mas não como fonte de dados. Escolha um repositório de dados original.";
 let cachedRepos = [];
 let repoListVisible = false;
 let repoPage = 1;
@@ -445,13 +446,15 @@ function renderReposList() {
             <strong>${escapeHTML(repo.fullName)}</strong>
             ${repo.isDataRepo ? '<span class="badge badge-ok">Dados</span>' : ""}
             ${repo.isIndexRepo ? '<span class="badge badge-ok">Índice</span>' : ""}
+            ${repo.reservedAsDataRepo ? '<span class="badge badge-warning">Técnico</span>' : ""}
           </p>
           <p>${repo.private ? "Privado" : "Público"} · branch padrão: ${escapeHTML(repo.defaultBranch || "-")}</p>
           <p class="code">${escapeHTML(repo.htmlUrl || "")}</p>
+          ${repo.reservedAsDataRepo ? '<p class="repo-warning">Parece ser repositório técnico/de índice. Permitido como índice, bloqueado como dados.</p>' : ""}
         </div>
         <div class="repo-actions">
-          <button class="btn" onclick="selectDataRepo('${escapeAttr(repo.fullName)}')">
-            ${repo.isDataRepo ? "Fonte de dados" : "Usar como dados"}
+          <button class="btn" ${repo.reservedAsDataRepo ? 'disabled title="Repositório técnico não pode ser fonte de dados"' : `onclick="selectDataRepo('${escapeAttr(repo.fullName)}')"`}>
+            ${repo.reservedAsDataRepo ? "Bloqueado como dados" : (repo.isDataRepo ? "Fonte de dados" : "Usar como dados")}
           </button>
           <button class="btn btn-secondary" onclick="selectIndexRepo('${escapeAttr(repo.fullName)}')">
             ${repo.isIndexRepo ? "Repo de índice" : "Usar como índice"}
@@ -476,7 +479,17 @@ function changeRepoPage(direction) {
 }
 
 
+function findCachedRepo(repoFullName) {
+  return cachedRepos.find(repo => repo.fullName === repoFullName);
+}
+
 async function selectDataRepo(repoFullName) {
+  const repo = findCachedRepo(repoFullName);
+  if (repo?.reservedAsDataRepo) {
+    msg("repos-msg", AVDC_RESERVED_DATA_REPO_MESSAGE, "error");
+    return;
+  }
+
   try {
     const data = await api("/auth/github/repos/select-data", {
       method: "POST",

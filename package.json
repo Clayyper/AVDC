@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "5.0.0",
-  "description": "AVDC v5.0 - Interface limpa, paginação e relatório técnico opcional",
+  "version": "5.0.5",
+  "description": "AVDC v5.0.5.5 - Validação de repositórios técnicos e interface limpa",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

@@ -14,6 +14,53 @@ function githubConfigured() {
   );
 }
 
+function normalizeRepoNameForGuard(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function isReservedTechnicalRepoName(repoFullName) {
+  const raw = String(repoFullName || "").trim();
+  const repoName = raw.includes("/") ? raw.split("/").pop() : raw;
+  const normalized = normalizeRepoNameForGuard(repoName);
+
+  const reservedNames = new Set([
+    "avdc-index",
+    "avdc-indice",
+    "indice-avdc",
+    "index-avdc",
+    "avdc-catalog",
+    "avdc-catalogo",
+    "catalog-avdc",
+    "catalogo-avdc",
+    "avdc-search-index",
+    "avdc-search",
+    "search-index-avdc",
+    "search-avdc",
+    "avdc-reports",
+    "avdc-relatorios",
+    "relatorios-avdc",
+    "reports-avdc"
+  ]);
+
+  if (reservedNames.has(normalized)) return true;
+
+  return (
+    normalized.startsWith("avdc-index-") ||
+    normalized.endsWith("-avdc-index") ||
+    normalized.startsWith("avdc-indice-") ||
+    normalized.endsWith("-avdc-indice") ||
+    normalized.startsWith("indice-avdc-") ||
+    normalized.startsWith("index-avdc-")
+  );
+}
+
 router.get("/connect", requireUser, (req, res) => {
   if (!githubConfigured()) {
     return res.status(500).send(`
@@ -177,7 +224,8 @@ router.get("/repos", requireUser, async (req, res) => {
       owner: repo.owner?.login || "",
       isDataRepo: repo.full_name === selectedData,
       isIndexRepo: repo.full_name === selectedIndex,
-      active: repo.full_name === selectedData
+      active: repo.full_name === selectedData,
+      reservedAsDataRepo: isReservedTechnicalRepoName(repo.full_name)
     }));
 
     res.json({
@@ -241,6 +289,12 @@ async function selectRepoForPurpose(req, res, purpose) {
     if (!repo) {
       return res.status(400).json({
         error: "Este repositório não está acessível para a conta GitHub conectada."
+      });
+    }
+
+    if (purpose === "data" && isReservedTechnicalRepoName(repoFullName)) {
+      return res.status(400).json({
+        error: "Este repositório parece ser técnico/de índice do AVDC. Ele pode ser usado como repositório de índice, mas não como fonte de dados. Escolha um repositório de dados original."
       });
     }
 
