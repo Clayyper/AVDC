@@ -753,28 +753,34 @@ function hasUserAiConfigured(config) {
   return !!(config?.aiProvider && config?.aiBaseUrl && config?.aiModel && (config?.aiToken || config?.aiProvider === "ollama"));
 }
 
+function normalizeSemanticMode(value) {
+  return String(value || "optimized").toLowerCase() === "full" ? "full" : "optimized";
+}
+
 function aiChatCompletionsUrl(baseUrl) {
   return `${String(baseUrl || "").replace(/\/+$/, "")}/chat/completions`;
 }
 
-function semanticCandidateFiles(files, query) {
+function semanticCandidateFiles(files, query, mode = "optimized") {
   const terms = tokenize(query);
+  const limit = mode === "full" ? 80 : 40;
   const scored = (files || [])
     .map(file => ({ file, score: scoreIndexFile(file, terms) }))
     .sort((a, b) => b.score - a.score || String(a.file.path || "").localeCompare(String(b.file.path || "")));
 
-  const positive = scored.filter(item => item.score > 0).slice(0, 40);
-  const fallback = scored.slice(0, 40);
+  const positive = scored.filter(item => item.score > 0).slice(0, limit);
+  const fallback = scored.slice(0, limit);
   return (positive.length > 0 ? positive : fallback).map(item => item.file);
 }
 
-function buildSemanticPrompt(query, candidates) {
+function buildSemanticPrompt(query, candidates, mode = "optimized") {
+  const previewLimit = mode === "full" ? 1800 : 900;
   const compact = candidates.map((file, index) => ({
     id: index + 1,
     path: file.path,
     name: file.name,
     extension: file.extension,
-    preview: safePreview(file.text || file.preview || file.path, 900)
+    preview: safePreview(file.text || file.preview || file.path, previewLimit)
   }));
 
   return [
@@ -782,6 +788,7 @@ function buildSemanticPrompt(query, candidates) {
     "Avalie quais arquivos parecem mais relevantes para a pergunta do usuário.",
     "Responda somente JSON válido no formato: {\"results\":[{\"id\":1,\"score\":0.95,\"reason\":\"explicação curta\"}]}",
     "Use apenas os candidatos fornecidos. Não invente caminhos.",
+    `Modo solicitado: ${mode === "full" ? "semântica completa" : "semântica otimizada"}.`,
     "",
     `Pergunta: ${query}`,
     "",
@@ -789,7 +796,7 @@ function buildSemanticPrompt(query, candidates) {
   ].join("\n");
 }
 
-async function callUserAiForSemanticSearch(config, query, candidates) {
+async function callUserAiForSemanticSearch(config, query, candidates, mode = "optimized") {
   const headers = {
     "Content-Type": "application/json",
     "Accept": "application/json"
@@ -807,7 +814,7 @@ async function callUserAiForSemanticSearch(config, query, candidates) {
       temperature: 0.1,
       messages: [
         { role: "system", content: "Você classifica candidatos por relevância semântica para o AVDC." },
-        { role: "user", content: buildSemanticPrompt(query, candidates) }
+        { role: "user", content: buildSemanticPrompt(query, candidates, mode) }
       ]
     })
   });
@@ -983,6 +990,7 @@ router.get("/search-semantic", async (req, res) => {
   try {
     const userId = req.session.user.id;
     const q = String(req.query.q || "").trim();
+    const mode = normalizeSemanticMode(req.query.mode);
 
     if (!q) {
       return res.status(400).json({ error: "Digite uma pergunta ou termo para a busca semântica." });
@@ -1012,13 +1020,13 @@ router.get("/search-semantic", async (req, res) => {
       return res.status(400).json({ error: "Nenhum índice de busca encontrado. Crie o catálogo primeiro." });
     }
 
-    const candidates = semanticCandidateFiles(searchIndex.files, q);
+    const candidates = semanticCandidateFiles(searchIndex.files, q, mode);
 
     if (candidates.length === 0) {
-      return res.json({ ok: true, query: q, semantic: true, provider: config.aiProvider, model: config.aiModel, results: [] });
+      return res.json({ ok: true, query: q, mode, semantic: true, provider: config.aiProvider, model: config.aiModel, results: [] });
     }
 
-    const aiResults = await callUserAiForSemanticSearch(config, q, candidates);
+    const aiResults = await callUserAiForSemanticSearch(config, q, candidates, mode);
     const candidateById = new Map(candidates.map((file, index) => [String(index + 1), file]));
 
     const results = aiResults
@@ -1043,6 +1051,7 @@ router.get("/search-semantic", async (req, res) => {
     res.json({
       ok: true,
       query: q,
+      mode,
       semantic: true,
       provider: config.aiProvider,
       model: config.aiModel,

@@ -52,6 +52,74 @@ function publicAiConfig(config) {
   };
 }
 
+
+function aiChatCompletionsUrl(baseUrl) {
+  return `${String(baseUrl || "").replace(/\/+$/, "")}/chat/completions`;
+}
+
+function buildTransientAiConfig(body) {
+  const provider = normalizeProvider(body.provider);
+  const baseUrl = normalizeBaseUrl(provider, body.baseUrl);
+  const model = String(body.model || "").trim();
+  const token = String(body.token || "").trim();
+
+  if (!baseUrl) {
+    const error = new Error("Informe a URL base do motor de IA antes de testar.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!model) {
+    const error = new Error("Informe o modelo de IA antes de testar.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (provider !== "ollama" && !token) {
+    const error = new Error("Informe a chave/token da IA antes de testar.");
+    error.status = 400;
+    throw error;
+  }
+
+  return { provider, baseUrl, model, token };
+}
+
+async function callAiHealthCheck({ provider, baseUrl, model, token }) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(aiChatCompletionsUrl(baseUrl), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      max_tokens: 16,
+      messages: [
+        { role: "system", content: "Responda apenas OK." },
+        { role: "user", content: "Teste de conexão AVDC. Responda OK." }
+      ]
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = data.error?.message || data.message || `Motor de IA respondeu com status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "OK";
+}
+
 async function getUserAiConfig(userId) {
   return getOne(`
     SELECT
@@ -127,6 +195,24 @@ router.post("/config", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erro ao salvar configuração de IA." });
+  }
+});
+
+
+router.post("/test", async (req, res) => {
+  try {
+    const config = buildTransientAiConfig(req.body || {});
+    await callAiHealthCheck(config);
+
+    res.json({
+      ok: true,
+      provider: config.provider,
+      model: config.model,
+      message: "Conexão da IA testada com sucesso. O Motor de IA respondeu ao AVDC."
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(error.status || 500).json({ error: error.message || "Erro ao testar conexão da IA." });
   }
 });
 

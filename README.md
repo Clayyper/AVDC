@@ -129,3 +129,14 @@ Sugestões para as próximas versões:
 - Comparação entre índices.
 - Plugins de extração por tipo de arquivo.
 - Busca semântica/IA como camada opcional.
+
+
+## V6.0.3
+
+Correção de interface da busca semântica:
+
+- Teste de conexão da IA fica no formulário Motor de IA.
+- Teste de IA não depende da busca semântica.
+- Checkbox Ativar busca semântica valida Motor de IA configurado.
+- Ao ativar, desabilita controles da busca simples.
+- Mostra formulário semântico com modos otimizada e completa.

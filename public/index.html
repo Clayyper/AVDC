@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC V6 - IA opcional e Catálogo</title>
+<title>AVDC V6.0.3 - IA opcional e Busca semântica</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">V6</div>
+  <div class="version-badge">V6.0.3</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -49,7 +49,7 @@
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">V6</div>
+  <div class="version-badge">V6.0.3</div>
 
   <div class="header">
     <div>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">V6</div>
+  <div class="version-badge">V6.0.3</div>
 
   <div class="header">
     <div>
@@ -333,7 +333,13 @@
       </div>
     </div>
 
+    <div class="note">
+      <p><strong>Como preencher:</strong> escolha o provedor, informe a URL base oficial do provedor, o modelo e a chave/token da sua conta. Exemplo OpenAI: URL base <span class="code">https://api.openai.com/v1</span>.</p>
+      <p>O botão de teste valida somente a conexão do Motor de IA. Ele não depende da busca semântica estar ativada.</p>
+    </div>
+
     <button class="btn btn-success" id="btn-save-ai-config">Salvar Motor de IA</button>
+    <button class="btn btn-secondary" id="btn-test-ai-config" type="button">Testar conexão da IA</button>
     <button class="btn btn-danger" id="btn-disconnect-ai">Desconectar IA</button>
 
     <div id="ai-msg" class="msg"></div>
@@ -343,14 +349,33 @@
     <h3>Busca semântica</h3>
     <p>Usa o Motor de IA configurado por este usuário para interpretar a intenção da pergunta. Se a IA não estiver configurada, a busca semântica não é simulada.</p>
 
-    <div class="form-grid">
-      <div>
-        <label>Pergunta semântica</label>
-        <input type="text" id="semantic-search-query" placeholder="Ex.: onde está a regra de cálculo do cliente?" />
-      </div>
+    <div class="note">
+      <label class="inline-checkbox">
+        <input type="checkbox" id="semantic-search-enabled">
+        Ativar busca semântica
+      </label>
+      <p>Ao ativar este modo, o AVDC valida se o Motor de IA está configurado. Se estiver, os controles da busca simples ficam desabilitados enquanto a busca semântica estiver marcada.</p>
     </div>
 
-    <button class="btn btn-success" id="btn-search-semantic">Buscar por semântica</button>
+    <div id="semantic-search-form" class="semantic-search-form hidden">
+      <div class="form-grid">
+        <div>
+          <label>Modo semântico</label>
+          <select id="semantic-search-mode" disabled>
+            <option value="optimized">Semântica otimizada</option>
+            <option value="full">Semântica completa</option>
+          </select>
+          <small>Otimizada usa menos contexto e tende a ser mais rápida. Completa envia mais contexto dos candidatos e pode consumir mais tokens/créditos.</small>
+        </div>
+
+        <div>
+          <label>Pergunta semântica</label>
+          <input type="text" id="semantic-search-query" placeholder="Ex.: onde está a regra de cálculo do cliente?" disabled />
+        </div>
+      </div>
+
+      <button class="btn btn-success" id="btn-search-semantic" disabled>Buscar por semântica</button>
+    </div>
 
     <div id="semantic-search-msg" class="msg"></div>
 

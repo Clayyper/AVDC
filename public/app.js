@@ -22,6 +22,7 @@ let cachedExecutionDetails = [];
 let executionDetailsVisible = false;
 let executionDetailsPage = 1;
 let userAiConfigured = false;
+let semanticModeEnabled = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -389,7 +390,6 @@ function renderAiStatus(ai) {
   const providerLabel = $("ai-provider-label");
   const modelLabel = $("ai-model-label");
   const connectedAtLabel = $("ai-connected-at-label");
-  const semanticButton = $("btn-search-semantic");
   const semanticBox = $("semantic-search-results");
 
   if (statusLabel) {
@@ -406,9 +406,75 @@ function renderAiStatus(ai) {
   if ($("ai-model") && ai?.model) $("ai-model").value = ai.model;
   if ($("ai-token")) $("ai-token").value = "";
 
-  if (semanticButton) semanticButton.disabled = !configured;
   if (!configured && semanticBox) {
     semanticBox.innerHTML = "<p>Busca semântica indisponível: configure primeiro o Motor de IA deste usuário.</p>";
+  }
+
+  syncSemanticSearchMode({ silent: true });
+}
+
+function setDisabled(id, disabled) {
+  const el = $(id);
+  if (el) el.disabled = disabled;
+}
+
+function setSemanticControlsEnabled(enabled) {
+  setDisabled("semantic-search-query", !enabled);
+  setDisabled("semantic-search-mode", !enabled);
+  setDisabled("btn-search-semantic", !enabled);
+
+  const form = $("semantic-search-form");
+  if (form) form.classList.toggle("hidden", !enabled);
+}
+
+function setSimpleSearchControlsDisabled(disabled) {
+  [
+    "btn-prepare-catalog",
+    "btn-refresh-catalog",
+    "btn-advanced-index",
+    "btn-open-note",
+    "catalog-sort-mode",
+    "catalog-write-extraction-report",
+    "search-query",
+    "btn-search-index"
+  ].forEach(id => setDisabled(id, disabled));
+
+  renderCatalogList();
+}
+
+function syncSemanticSearchMode(options = {}) {
+  const silent = !!options.silent;
+  const checkbox = $("semantic-search-enabled");
+  const semanticBox = $("semantic-search-results");
+  const wantsSemantic = !!checkbox?.checked;
+
+  if (wantsSemantic && !userAiConfigured) {
+    semanticModeEnabled = false;
+    if (checkbox) checkbox.checked = false;
+    setSemanticControlsEnabled(false);
+    setSimpleSearchControlsDisabled(false);
+
+    if (!silent) {
+      msg("semantic-search-msg", "Para usar busca semântica, configure primeiro o Motor de IA deste usuário.", "error");
+    }
+
+    if (semanticBox) {
+      semanticBox.innerHTML = "<p>Busca semântica indisponível: configure primeiro o Motor de IA deste usuário.</p>";
+    }
+    return;
+  }
+
+  semanticModeEnabled = wantsSemantic && userAiConfigured;
+  setSemanticControlsEnabled(semanticModeEnabled);
+  setSimpleSearchControlsDisabled(semanticModeEnabled);
+
+  if (semanticModeEnabled) {
+    if (!silent) msg("semantic-search-msg", "Busca semântica ativada. Os controles da busca simples foram desabilitados enquanto este modo estiver marcado.", "ok");
+    if (semanticBox && !semanticBox.innerHTML.trim()) {
+      semanticBox.innerHTML = "<p>Digite uma pergunta para buscar por semântica.</p>";
+    }
+  } else {
+    if (!silent) msg("semantic-search-msg", "Busca semântica desativada. Controles da busca simples habilitados novamente.", "ok");
   }
 }
 
@@ -442,6 +508,29 @@ async function saveAiConfig() {
   }
 }
 
+async function testAiConfig() {
+  try {
+    const provider = $("ai-provider").value;
+    const baseUrl = $("ai-base-url").value.trim();
+    const model = $("ai-model").value.trim();
+    const token = $("ai-token").value.trim();
+
+    setDisabled("btn-test-ai-config", true);
+    msg("ai-msg", "Testando conexão do Motor de IA...", "ok");
+
+    const data = await api("/api/ai/test", {
+      method: "POST",
+      body: JSON.stringify({ provider, baseUrl, model, token })
+    });
+
+    msg("ai-msg", data.message || "Conexão da IA testada com sucesso.", "ok");
+  } catch (err) {
+    msg("ai-msg", err.message, "error");
+  } finally {
+    setDisabled("btn-test-ai-config", false);
+  }
+}
+
 async function disconnectAi() {
   if (!confirm("Desconectar o Motor de IA deste usuário?")) return;
 
@@ -458,6 +547,11 @@ async function searchSemanticIndex() {
   try {
     const q = $("semantic-search-query").value.trim();
 
+    if (!semanticModeEnabled) {
+      msg("semantic-search-msg", "Marque a opção Busca semântica para usar este modo. A IA precisa estar configurada para habilitar os campos.", "error");
+      return;
+    }
+
     if (!q) {
       msg("semantic-search-msg", "Digite uma pergunta para a busca semântica.", "error");
       return;
@@ -468,10 +562,12 @@ async function searchSemanticIndex() {
       return;
     }
 
-    const data = await api(`/api/index/search-semantic?q=${encodeURIComponent(q)}`);
+    const mode = $("semantic-search-mode")?.value || "optimized";
+    const data = await api(`/api/index/search-semantic?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}`);
     const results = data.results || [];
+    const modeLabel = mode === "full" ? "semântica completa" : "semântica otimizada";
 
-    msg("semantic-search-msg", `${results.length} resultado(s) semântico(s) encontrado(s). Motor: ${data.provider || "-"} / ${data.model || "-"}.`, "ok");
+    msg("semantic-search-msg", `${results.length} resultado(s) encontrado(s) em ${modeLabel}. Motor: ${data.provider || "-"} / ${data.model || "-"}.`, "ok");
     renderSemanticSearchResults(results, q);
   } catch (err) {
     msg("semantic-search-msg", err.message, "error");
@@ -904,7 +1000,7 @@ function renderCatalogList() {
       <div class="avdc-list-summary">
         <p><strong>Catálogo criado.</strong></p>
         <p>${total} arquivo(s) no catálogo.</p>
-        <button class="btn btn-secondary" type="button" onclick="toggleCatalogList()">${actionText}</button>
+        <button class="btn btn-secondary" type="button" onclick="toggleCatalogList()" ${semanticModeEnabled ? "disabled" : ""}>${actionText}</button>
         ${reservedNote}
       </div>
     `;
@@ -920,7 +1016,7 @@ function renderCatalogList() {
     <div class="avdc-list-summary">
       <p><strong>Catálogo criado.</strong></p>
       <p>${total} arquivo(s) no catálogo.</p>
-      <button class="btn btn-secondary" type="button" onclick="toggleCatalogList()">${actionText}</button>
+      <button class="btn btn-secondary" type="button" onclick="toggleCatalogList()" ${semanticModeEnabled ? "disabled" : ""}>${actionText}</button>
       ${reservedNote}
     </div>
 
@@ -1178,10 +1274,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btn-search-index").onclick = searchIndex;
   $("search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchIndex(); });
   $("btn-save-ai-config").onclick = saveAiConfig;
+  $("btn-test-ai-config").onclick = testAiConfig;
   $("btn-disconnect-ai").onclick = disconnectAi;
   $("ai-provider").onchange = updateAiBaseUrlSuggestion;
   $("btn-search-semantic").onclick = searchSemanticIndex;
+  $("semantic-search-enabled").onchange = () => syncSemanticSearchMode();
   $("semantic-search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchSemanticIndex(); });
+  syncSemanticSearchMode({ silent: true });
 
   // ====== GUARDAR NOTA ======
 
