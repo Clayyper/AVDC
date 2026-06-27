@@ -295,7 +295,7 @@ async function changeAdminPassword() {
 async function loadUserProfile() {
   try {
     const data = await api("/api/user/profile");
-    renderGithubStatus(data.github); renderRepositoryStatus(data.repository);
+    renderGithubStatus(data.github); renderRepositoryStatus(data.repository); await loadLatestCatalog();
   } catch (err) {
     msg("github-msg", err.message, "error");
   }
@@ -400,9 +400,157 @@ async function selectRepo(repoFullName) {
 
     await loadUserProfile();
     await loadRepos();
+    await loadLatestCatalog();
   } catch (err) {
     msg("repos-msg", err.message, "error");
   }
+}
+
+
+
+function clearCatalogView() {
+  const repoLabel = $("catalog-repo-label");
+  const statusLabel = $("catalog-status-label");
+  const countLabel = $("catalog-files-count");
+  const runDate = $("catalog-run-date");
+  const box = $("catalog-container");
+
+  if (repoLabel) repoLabel.textContent = "Nenhum";
+  if (statusLabel) statusLabel.textContent = "Nenhum catálogo criado";
+  if (countLabel) countLabel.textContent = "0";
+  if (runDate) runDate.textContent = "-";
+  if (box) box.innerHTML = "<p>Nenhum catálogo criado ainda.</p>";
+}
+
+function currentCatalogSortMode() {
+  return $("catalog-sort-mode")?.value || "alpha";
+}
+
+async function loadLatestCatalog() {
+  try {
+    const sortMode = currentCatalogSortMode();
+    const data = await api(`/api/index/latest?sortMode=${encodeURIComponent(sortMode)}`);
+
+    if (!data.run) {
+      clearCatalogView();
+      if (data.selectedRepoFullName && $("catalog-repo-label")) {
+        $("catalog-repo-label").textContent = data.selectedRepoFullName;
+      }
+      return;
+    }
+
+    renderCatalogRun(data.run);
+    renderCatalogFiles(data.files || []);
+  } catch (err) {
+    clearCatalogView();
+  }
+}
+
+async function refreshCatalogView() {
+  try {
+    const sortMode = currentCatalogSortMode();
+    const data = await api(`/api/index/files?sortMode=${encodeURIComponent(sortMode)}`);
+
+    if (data.run) {
+      renderCatalogRun(data.run);
+    }
+
+    renderCatalogFiles(data.files || []);
+    msg("catalog-msg", "Visualização atualizada.", "ok");
+  } catch (err) {
+    msg("catalog-msg", err.message, "error");
+  }
+}
+
+async function prepareCatalog() {
+  try {
+    const sortMode = currentCatalogSortMode();
+
+    msg("catalog-msg", "Criando catálogo. Aguarde...", "ok");
+
+    const data = await api("/api/index/prepare", {
+      method: "POST",
+      body: JSON.stringify({ sortMode })
+    });
+
+    renderCatalogRun(data.run);
+    renderCatalogFiles(data.files || []);
+
+    let text = `Catálogo criado com ${data.run.filesCount} arquivo(s).`;
+
+    if (data.run.truncated) {
+      text += " Atenção: o GitHub informou que a árvore foi truncada.";
+    }
+
+    if (sortMode === "updated_desc" && data.run.dateLookupLimit > 0) {
+      text += ` Datas de última alteração obtidas para ${data.run.dateLookupCount} arquivo(s), com limite de ${data.run.dateLookupLimit}.`;
+    }
+
+    msg("catalog-msg", text, "ok");
+  } catch (err) {
+    msg("catalog-msg", err.message, "error");
+  }
+}
+
+function renderCatalogRun(run) {
+  if (!run) {
+    clearCatalogView();
+    return;
+  }
+
+  $("catalog-repo-label").textContent = run.repoFullName || "Nenhum";
+  $("catalog-status-label").textContent = run.status || "-";
+  $("catalog-files-count").textContent = String(run.filesCount ?? 0);
+  $("catalog-run-date").textContent = formatDate(run.finishedAt || run.createdAt);
+}
+
+function renderCatalogFiles(files) {
+  const box = $("catalog-container");
+
+  if (!box) return;
+
+  if (!files || files.length === 0) {
+    box.innerHTML = "<p>Nenhum arquivo no catálogo.</p>";
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="catalog-table-wrap">
+      <table class="catalog-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Extensão</th>
+            <th>Caminho</th>
+            <th>Tamanho</th>
+            <th>Última alteração</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${files.map(file => `
+            <tr>
+              <td><a href="${escapeAttr(file.githubUrl || "#")}" target="_blank" rel="noopener noreferrer">${escapeHTML(file.name || "-")}</a></td>
+              <td>${escapeHTML(file.extension || "-")}</td>
+              <td class="code">${escapeHTML(file.path || "-")}</td>
+              <td>${formatBytes(file.sizeBytes)}</td>
+              <td>${formatDate(file.githubUpdatedAt)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    <p class="catalog-help">Mostrando até 500 arquivos do catálogo mais recente.</p>
+  `;
+}
+
+function formatBytes(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return "-";
+  if (number < 1024) return `${number} B`;
+  if (number < 1024 * 1024) return `${(number / 1024).toFixed(1)} KB`;
+
+  return `${(number / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 
@@ -453,6 +601,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btn-change-github").onclick = connectGithub;
   $("btn-disconnect-github").onclick = disconnectGithub;
   $("btn-load-repos").onclick = loadRepos;
+  $("btn-prepare-catalog").onclick = prepareCatalog;
+  $("btn-refresh-catalog").onclick = refreshCatalogView;
+  $("catalog-sort-mode").onchange = refreshCatalogView;
 
   const params = new URLSearchParams(location.search);
   if (params.get("github") === "connected") {

@@ -407,3 +407,38 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+
+.catalog-container {
+  margin-top: 14px;
+}
+
+.catalog-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.catalog-table th,
+.catalog-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.catalog-table th {
+  background: var(--bg-color);
+}
+
+.catalog-help {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-top: 8px;
+}

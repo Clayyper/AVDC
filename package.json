@@ -1,7 +1,7 @@
 {
-  "name": "avdc-admin-db-v2-3",
-  "version": "2.7.0",
-  "description": "AVDC v2.7 - Listar e selecionar repositório GitHub ativo",
+  "name": "avdc",
+  "version": "2.8.0",
+  "description": "AVDC v2.8 - Catálogo inicial do índice do repositório ativo",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
