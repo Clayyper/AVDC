@@ -503,7 +503,7 @@ async function prepareCatalog() {
 
     const data = await api("/api/index/prepare", {
       method: "POST",
-      body: JSON.stringify({ sortMode })
+      body: JSON.stringify({ sortMode, filters: advancedFilters })
     });
 
     renderCatalogRun(data.run);

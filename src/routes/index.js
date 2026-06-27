@@ -657,6 +657,12 @@ router.get("/search", async (req, res) => {
 router.post("/prepare", async (req, res) => {
   const userId = req.session.user.id;
   const sortMode = normalizeSortMode(req.body.sortMode);
+  const filters = req.body.filters || {};
+  const filterExtensions = Array.isArray(filters.extensions) && filters.extensions.length > 0 ? new Set(filters.extensions.map(e => String(e).toLowerCase())) : null;
+  const filterDirectories = Array.isArray(filters.directories) && filters.directories.length > 0 ? filters.directories.map(d => String(d).toLowerCase()) : null;
+  const filterMinBytes = filters.minSizeKB ? Number(filters.minSizeKB) * 1024 : 0;
+  const filterMaxBytes = filters.maxSizeMB ? Number(filters.maxSizeMB) * 1024 * 1024 : null;
+  const filterPathContains = filters.pathContains ? String(filters.pathContains).toLowerCase() : null;
   let runId = null;
 
   try {
@@ -717,7 +723,29 @@ router.post("/prepare", async (req, res) => {
 
     const discoveredAt = new Date().toISOString();
 
-    const files = rawFiles.map(item => {
+    // Aplicar filtros avançados se definidos
+    function passesAdvancedFilters(item) {
+      const { name, directory } = splitPath(item.path);
+      const ext = extensionFromName(name).toLowerCase();
+      const size = Number(item.size || 0);
+      const pathLower = String(item.path || "").toLowerCase();
+
+      if (filterExtensions && !filterExtensions.has(ext)) return false;
+      if (filterDirectories && !filterDirectories.some(d => pathLower.startsWith(d))) return false;
+      if (filterMinBytes && size < filterMinBytes) return false;
+      if (filterMaxBytes && size > filterMaxBytes) return false;
+      if (filterPathContains && !pathLower.includes(filterPathContains)) return false;
+
+      return true;
+    }
+
+    const filteredRawFiles = (filterExtensions || filterDirectories || filterMinBytes || filterMaxBytes || filterPathContains)
+      ? rawFiles.filter(passesAdvancedFilters)
+      : rawFiles;
+
+    console.log(`[AVDC] Filtro avançado: ${rawFiles.length} → ${filteredRawFiles.length} arquivos`);
+
+    const files = filteredRawFiles.map(item => {
       const { name, directory } = splitPath(item.path);
       return {
         path: item.path,
