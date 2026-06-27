@@ -605,6 +605,42 @@ function formatBytes(value) {
 
 
 
+async function saveNote() {
+  try {
+    const name = $("note-name").value.trim();
+    const content = $("note-content").value;
+
+    if (!name) {
+      msg("note-msg", "Informe um nome para a nota.", "error");
+      return;
+    }
+
+    if (!content.trim()) {
+      msg("note-msg", "A nota está vazia. Escreva algum conteúdo.", "error");
+      return;
+    }
+
+    const btn = $("btn-save-note");
+    btn.disabled = true;
+
+    try {
+      await api("/api/index/note", {
+        method: "POST",
+        body: JSON.stringify({ name, content })
+      });
+
+      $("note-name").value = "";
+      $("note-content").value = "";
+      $("note-modal").classList.add("hidden");
+      msg("search-msg", "Nota salva no repositório configurado.", "ok");
+    } finally {
+      btn.disabled = false;
+    }
+  } catch (err) {
+    msg("note-msg", err.message, "error");
+  }
+}
+
 async function searchIndex() {
   try {
     const q = $("search-query").value.trim();
@@ -737,6 +773,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("catalog-sort-mode").onchange = refreshCatalogView;
   $("btn-search-index").onclick = searchIndex;
   $("search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchIndex(); });
+
+  // ====== GUARDAR NOTA ======
+
+  $("btn-open-note").addEventListener("click", () => {
+    $("note-msg").textContent = "";
+    $("note-msg").className = "msg";
+    $("note-modal").classList.remove("hidden");
+  });
+
+  $("btn-close-note-modal").addEventListener("click", () => {
+    $("note-modal").classList.add("hidden");
+  });
+
+  $("btn-cancel-note").addEventListener("click", () => {
+    $("note-modal").classList.add("hidden");
+  });
+
+  $("btn-save-note").addEventListener("click", saveNote);
 
   // ====== ÍNDICE AVANÇADO ======
 

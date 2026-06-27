@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 
 const { query, getOne, getAll } = require("../db");
 const { requireUser } = require("../middleware");
@@ -140,6 +141,43 @@ function toBase64(value) {
 
 function fromBase64(value) {
   return Buffer.from(value || "", "base64").toString("utf8");
+}
+
+// ===== Notas rápidas (.vcd) =====
+const AVDC_NOTES_DIR = "avdc-notes";
+
+/*
+  Slug conservador para o nome da nota:
+  - minúsculas
+  - acento vira letra base (ç->c, á->a, ã->a)
+  - espaços viram hífen
+  - barras / e \ removidas (evita criar subpasta acidental dentro de avdc-notes)
+  - demais caracteres não [a-z0-9-] removidos
+  - hífens colapsados e aparados nas pontas
+  - fallback "nota" se o resultado ficar vazio
+*/
+function slugifyNoteName(value) {
+  const base = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\\/]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return base || "nota";
+}
+
+// Sufixo aleatório curto (4 chars) para garantir nome único sem listar a pasta.
+function randomNoteSuffix() {
+  return crypto.randomBytes(2).toString("hex");
+}
+
+// Data do servidor no formato YYYY-MM-DD.
+function serverDateStamp() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function normalizeText(value) {
@@ -998,6 +1036,77 @@ router.get("/scan", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(error.status || 500).json({ error: error.message || "Erro ao escanear repositório." });
+  }
+});
+
+/*
+  POST /api/index/note
+  Guarda uma nota rápida (.vcd) na pasta /avdc-notes/ do repositório de DADOS.
+  A nota é salva no repo de dados (não no de índice) justamente para entrar
+  nas próximas indexações e ficar buscável pelo próprio sistema.
+
+  Escopo intencionalmente mínimo: apenas cria o arquivo.
+  Não edita, exclui, lista nem categoriza — isso fica por conta do usuário no GitHub.
+*/
+router.post("/note", async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const rawName = String(req.body.name || "").trim();
+    const content = String(req.body.content != null ? req.body.content : "");
+
+    if (!rawName) {
+      return res.status(400).json({ error: "Informe um nome para a nota." });
+    }
+
+    if (!content.trim()) {
+      return res.status(400).json({ error: "A nota está vazia. Escreva algum conteúdo." });
+    }
+
+    const config = await getUserGithubConfig(userId);
+
+    if (!config || Number(config.githubConnected) !== 1 || !config.githubToken) {
+      return res.status(400).json({ error: "GitHub não conectado para este usuário." });
+    }
+
+    const dataRepoFullName = config.selectedDataRepoFullName || config.selectedRepoFullName || null;
+
+    if (!dataRepoFullName) {
+      return res.status(400).json({ error: "Nenhum repositório de dados selecionado." });
+    }
+
+    const token = config.githubToken;
+
+    const dataRepo = await fetchGithubJson(`https://api.github.com/repos/${dataRepoFullName}`, token);
+    const branch = dataRepo.default_branch || "main";
+
+    const slug = slugifyNoteName(rawName);
+    const stamp = serverDateStamp();
+    const suffix = randomNoteSuffix();
+    const fileName = `${stamp}-${slug}-${suffix}.vcd`;
+    const filePath = `${AVDC_NOTES_DIR}/${fileName}`;
+
+    const commitMessage = `AVDC: nota rápida ${fileName}`;
+
+    const result = await putGithubFile(
+      dataRepoFullName,
+      branch,
+      filePath,
+      content,
+      commitMessage,
+      token
+    );
+
+    res.json({
+      ok: true,
+      path: filePath,
+      fileName,
+      repoFullName: dataRepoFullName,
+      branch,
+      htmlUrl: result.htmlUrl || githubFileUrl(dataRepoFullName, branch, filePath)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(error.status || 500).json({ error: error.message || "Erro ao guardar a nota." });
   }
 });
 

@@ -5,7 +5,7 @@
 1. O usuário seleciona o repositório de dados.
 2. O AVDC consulta a árvore/listagem do repositório para permitir filtros.
 3. O usuário pode aplicar filtros antes de criar o índice.
-4. Se o usuário não aplicar filtro, o catálogo/indexação considera todos os arquivos possíveis.
+4. Se o usuário não aplicar filtro, o catálogo considera todos os arquivos elegíveis, respeitando sempre as pastas reservadas e regras de segurança.
 5. Se o usuário aplicar filtro, o catálogo final já deve ser criado somente com os arquivos filtrados.
 6. Depois disso, o AVDC tenta extrair conteúdo dos arquivos desse catálogo.
 7. O índice é salvo no repositório de índice, dentro de `/avdc-index/`.
@@ -35,6 +35,26 @@ Se conseguir extrair texto, entra na busca.
 Se não conseguir, o arquivo continua no catálogo como catalogado sem conteúdo extraído.
 
 Um arquivo problemático nunca deve derrubar o índice inteiro.
+
+## Notas Rápidas
+
+A interface pode oferecer um botão simples chamado **Guardar nota**.
+
+Texto de apoio:
+
+```txt
+Guarde anotações rápidas no seu repositório.
+```
+
+Ao salvar, o AVDC cria um arquivo no repositório configurado, dentro de `/avdc-notes/`, com extensão `.vcd`.
+
+Exemplo:
+
+```txt
+/avdc-notes/2026-06-27-minha-nota.vcd
+```
+
+Essa função deve permanecer discreta: não edita, exclui, lista, categoriza ou anexa arquivos. O AVDC apenas cria a nota; o usuário gerencia no GitHub.
 
 ## Produto
 

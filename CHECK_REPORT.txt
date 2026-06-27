@@ -1,2 +1,9 @@
-Verificação de sintaxe JavaScript OK.
-Arquivos verificados: 10
+AVDC v4.1 - Verificação
+
+- Package atualizado para 4.1.0.
+- Regra de notas rápidas revisada: /avdc-notes/ com extensão .vcd.
+- Texto de interface mantido simples: "Guarde anotações rápidas no seu repositório."
+- fetchGithubJson revisado em fetchFileContent: chamada usando apenas url e token.
+- Documentação ajustada para "arquivos elegíveis" em vez de "arquivos possíveis".
+- Verificação de sintaxe JavaScript OK.
+- Arquivos JavaScript verificados: 10.

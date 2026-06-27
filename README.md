@@ -1,10 +1,10 @@
-# AVDC v3.8 - Base Consolidada
+# AVDC v4.1 - Base Consolidada
 
 **Seu repositório. Seu banco de dados. Seu arsenal. Sua própria inteligência.**
 
 O AVDC transforma repositórios de código, fontes e documentos técnicos em uma base de conhecimento pesquisável, mantendo os dados originais preservados e o índice separado, controlado pelo próprio usuário.
 
-## Escopo consolidado da v3.8
+## Escopo consolidado da v4.1
 
 Esta versão consolida a base funcional do AVDC:
 
@@ -23,6 +23,7 @@ Esta versão consolida a base funcional do AVDC:
 - Destaque visual do termo buscado.
 - Abertura do arquivo original no GitHub/web.
 - Gravação do índice no repositório de índice dentro de `/avdc-index/`.
+- Botão discreto para guardar anotações rápidas no repositório configurado.
 
 ## Regra central
 
@@ -42,7 +43,7 @@ Essas pastas são sempre ignoradas na listagem, no catálogo, na indexação e n
 1. O usuário seleciona o repositório de dados.
 2. O AVDC consulta a árvore/listagem do repositório para montar os filtros.
 3. O usuário pode aplicar filtros antes de criar o índice.
-4. Se não aplicar filtro, o catálogo considera todos os arquivos possíveis.
+4. Se não aplicar filtro, o catálogo considera todos os arquivos elegíveis, respeitando sempre as pastas reservadas e regras de segurança.
 5. Se aplicar filtro, o catálogo final já nasce com os arquivos filtrados.
 6. O AVDC tenta extrair conteúdo dos arquivos desse catálogo.
 7. O índice é salvo no repositório de índice, dentro de `/avdc-index/`.
@@ -84,13 +85,41 @@ O AVDC não precisa interpretar a extensão para abrir internamente. O usuário 
 
 Quando houver trecho exibido, o termo buscado deve aparecer destacado visualmente.
 
+## Notas rápidas
+
+A interface pode oferecer um botão simples chamado **Guardar nota**, com o texto de apoio:
+
+```txt
+Guarde anotações rápidas no seu repositório.
+```
+
+Ao salvar, o AVDC cria um arquivo simples no repositório configurado, dentro de:
+
+```txt
+/avdc-notes/
+```
+
+A extensão padrão das notas é:
+
+```txt
+.vcd
+```
+
+Exemplo:
+
+```txt
+/avdc-notes/2026-06-27-minha-nota.vcd
+```
+
+A V4.1 não precisa editar, excluir, listar, categorizar ou anexar arquivos às notas. O AVDC apenas cria o arquivo; a gestão fica por conta do usuário no GitHub.
+
 ## Próxima linha de evolução
 
 A partir desta base consolidada, a próxima fase pode ser tratada como:
 
-**AVDC v4.0 - Inteligência do Índice**
+**AVDC v4.1 - Inteligência do Índice**
 
-Sugestões para a v4:
+Sugestões para as próximas versões:
 
 - Seleção visual de pastas pela árvore do repositório.
 - Indexação incremental.

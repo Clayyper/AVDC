@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC v3.8 - Catálogo do Índice</title>
+<title>AVDC v4.0 - Catálogo do Índice</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">v3.8</div>
+  <div class="version-badge">v4.0</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -49,7 +49,7 @@
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">v3.8</div>
+  <div class="version-badge">v4.0</div>
 
   <div class="header">
     <div>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">v3.8</div>
+  <div class="version-badge">v4.0</div>
 
   <div class="header">
     <div>
@@ -287,6 +287,8 @@
     </div>
 
     <button class="btn btn-success" id="btn-search-index">Buscar</button>
+    <button class="btn btn-link btn-note" id="btn-open-note">Guardar nota</button>
+    <p class="note-hint">Guarde anotações rápidas no seu repositório.</p>
 
     <div id="search-msg" class="msg"></div>
 
@@ -340,6 +342,33 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" id="btn-cancel-advanced">Cancelar</button>
       <button class="btn btn-success" id="btn-apply-advanced-filters">Aplicar filtros</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Guardar Nota -->
+<div class="modal-overlay hidden" id="note-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Guardar nota</h3>
+      <button class="modal-close" id="btn-close-note-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="note-msg" class="msg"></div>
+
+      <div class="filter-section">
+        <h4>Nome da nota</h4>
+        <input type="text" id="note-name" placeholder="Ex.: ideia integração Datasul">
+      </div>
+
+      <div class="filter-section">
+        <h4>Conteúdo</h4>
+        <textarea id="note-content" rows="10" placeholder="Cole ou escreva sua anotação (texto, código, Markdown...)"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btn-cancel-note">Cancelar</button>
+      <button class="btn btn-success" id="btn-save-note">Salvar</button>
     </div>
   </div>
 </div>
