@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "2.9.0",
-  "description": "AVDC v2.9 - Seleção separada de repositório de dados e repositório de índice",
+  "version": "3.0.0",
+  "description": "AVDC v3.0 - Gravar catálogo do índice no repositório de índice",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

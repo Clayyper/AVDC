@@ -8,6 +8,9 @@ const router = express.Router();
 router.use(requireUser);
 
 const VALID_SORT_MODES = new Set(["alpha", "updated_desc"]);
+const AVDC_INDEX_DIR = "avdc-index";
+const MANIFEST_PATH = `${AVDC_INDEX_DIR}/manifest.json`;
+const CATALOG_PATH = `${AVDC_INDEX_DIR}/catalog.json`;
 
 function normalizeSortMode(value) {
   return VALID_SORT_MODES.has(value) ? value : "alpha";
@@ -25,6 +28,17 @@ function extensionFromName(name) {
   const index = value.lastIndexOf(".");
   if (index <= 0 || index === value.length - 1) return "";
   return value.slice(index + 1).toLowerCase();
+}
+
+function isReservedAvdcIndexPath(filePath) {
+  const normalized = String(filePath || "").replace(/^\/+/, "").toLowerCase();
+
+  return (
+    normalized === AVDC_INDEX_DIR ||
+    normalized.startsWith(`${AVDC_INDEX_DIR}/`) ||
+    normalized === ".avdc-index" ||
+    normalized.startsWith(".avdc-index/")
+  );
 }
 
 function githubFileUrl(repoFullName, branch, filePath) {
@@ -99,12 +113,173 @@ async function fetchLatestCommitDate(repoFullName, branch, filePath, token) {
   }
 }
 
+function stableJson(value) {
+  return JSON.stringify(value, null, 2) + "\n";
+}
+
+function toBase64(value) {
+  return Buffer.from(value, "utf8").toString("base64");
+}
+
+async function getExistingContentSha(repoFullName, path, token) {
+  const url = `https://api.github.com/repos/${repoFullName}/contents/${path}`;
+
+  const response = await fetch(url, {
+    headers: githubHeaders(token)
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = data.message || `Erro ao verificar arquivo existente: ${path}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.details = data;
+    throw error;
+  }
+
+  return data.sha || null;
+}
+
+async function putGithubFile(repoFullName, branch, path, content, message, token) {
+  const existingSha = await getExistingContentSha(repoFullName, path, token);
+
+  const body = {
+    message,
+    content: toBase64(content),
+    branch
+  };
+
+  if (existingSha) {
+    body.sha = existingSha;
+  }
+
+  const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents/${path}`, {
+    method: "PUT",
+    headers: {
+      ...githubHeaders(token),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const messageText = data.message || `Erro ao gravar ${path} no GitHub`;
+    const error = new Error(messageText);
+    error.status = response.status;
+    error.details = data;
+    throw error;
+  }
+
+  return {
+    contentSha: data.content?.sha || null,
+    commitSha: data.commit?.sha || null,
+    htmlUrl: data.content?.html_url || null
+  };
+}
+
+async function writeIndexFilesToGithub({
+  token,
+  indexRepoFullName,
+  indexDefaultBranch,
+  dataRepoFullName,
+  dataDefaultBranch,
+  sortMode,
+  runId,
+  files,
+  createdAt
+}) {
+  const manifest = {
+    avdc: {
+      version: "3.0.0",
+      reservedDirectory: AVDC_INDEX_DIR,
+      note: "Arquivos gerados pelo AVDC. Não editar manualmente."
+    },
+    source: {
+      dataRepository: dataRepoFullName,
+      dataDefaultBranch,
+      ignoredPaths: [
+        `${AVDC_INDEX_DIR}/`,
+        ".avdc-index/"
+      ]
+    },
+    index: {
+      indexRepository: indexRepoFullName,
+      indexDefaultBranch,
+      manifestPath: MANIFEST_PATH,
+      catalogPath: CATALOG_PATH
+    },
+    run: {
+      id: runId,
+      sortMode,
+      filesCount: files.length,
+      createdAt
+    }
+  };
+
+  const catalog = {
+    avdc: {
+      version: "3.0.0",
+      type: "catalog"
+    },
+    source: {
+      dataRepository: dataRepoFullName,
+      dataDefaultBranch
+    },
+    index: {
+      indexRepository: indexRepoFullName,
+      indexDefaultBranch
+    },
+    generatedAt: createdAt,
+    files: files.map(file => ({
+      path: file.path,
+      directory: file.directory,
+      name: file.name,
+      extension: file.extension,
+      sizeBytes: file.sizeBytes,
+      sha: file.sha,
+      githubUrl: file.githubUrl,
+      githubUpdatedAt: file.githubUpdatedAt
+    }))
+  };
+
+  const manifestResult = await putGithubFile(
+    indexRepoFullName,
+    indexDefaultBranch,
+    MANIFEST_PATH,
+    stableJson(manifest),
+    "AVDC: atualizar manifesto do índice",
+    token
+  );
+
+  const catalogResult = await putGithubFile(
+    indexRepoFullName,
+    indexDefaultBranch,
+    CATALOG_PATH,
+    stableJson(catalog),
+    "AVDC: atualizar catálogo do índice",
+    token
+  );
+
+  return {
+    manifestResult,
+    catalogResult
+  };
+}
+
 function mapRun(row) {
   if (!row) return null;
 
   return {
     id: row.id,
     repoFullName: row.repo_full_name,
+    indexRepoFullName: row.index_repo_full_name,
     defaultBranch: row.default_branch,
     sortMode: row.sort_mode,
     status: row.status,
@@ -112,6 +287,10 @@ function mapRun(row) {
     truncated: Number(row.truncated) === 1,
     dateLookupCount: row.date_lookup_count,
     dateLookupLimit: row.date_lookup_limit,
+    indexWritten: Number(row.index_written) === 1,
+    indexManifestPath: row.index_manifest_path,
+    indexCatalogPath: row.index_catalog_path,
+    indexWrittenAt: row.index_written_at,
     errorMessage: row.error_message,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
@@ -165,13 +344,14 @@ router.get("/latest", async (req, res) => {
   try {
     const userId = req.session.user.id;
     const config = await getUserGithubConfig(userId);
-
     const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
 
     if (!selectedDataRepoFullName) {
       return res.json({
         ok: true,
         selectedRepoFullName: null,
+        selectedDataRepoFullName: null,
+        selectedIndexRepoFullName: config?.selectedIndexRepoFullName || null,
         run: null,
         files: []
       });
@@ -195,7 +375,9 @@ router.get("/latest", async (req, res) => {
 
     res.json({
       ok: true,
-      selectedRepoFullName: config.selectedRepoFullName,
+      selectedRepoFullName: selectedDataRepoFullName,
+      selectedDataRepoFullName,
+      selectedIndexRepoFullName: config.selectedIndexRepoFullName || null,
       run: mapRun(run),
       files: files.map(mapFile)
     });
@@ -212,12 +394,11 @@ router.get("/files", async (req, res) => {
     const userId = req.session.user.id;
     const sortMode = normalizeSortMode(req.query.sortMode);
     const config = await getUserGithubConfig(userId);
-
     const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
 
     if (!selectedDataRepoFullName) {
       return res.status(400).json({
-        error: "Nenhum repositório ativo selecionado."
+        error: "Nenhum repositório de dados selecionado."
       });
     }
 
@@ -262,24 +443,36 @@ router.post("/prepare", async (req, res) => {
     }
 
     const selectedDataRepoFullName = config.selectedDataRepoFullName || config.selectedRepoFullName || null;
+    const selectedIndexRepoFullName = config.selectedIndexRepoFullName || null;
 
     if (!selectedDataRepoFullName) {
       return res.status(400).json({
-        error: "Nenhum repositório ativo selecionado."
+        error: "Nenhum repositório de dados selecionado."
+      });
+    }
+
+    if (!selectedIndexRepoFullName) {
+      return res.status(400).json({
+        error: "Nenhum repositório de índice selecionado."
       });
     }
 
     const repoFullName = selectedDataRepoFullName;
+    const indexRepoFullName = selectedIndexRepoFullName;
     const token = config.githubToken;
     const now = new Date().toISOString();
 
-    const repo = await fetchGithubJson(`https://api.github.com/repos/${repoFullName}`, token);
-    const defaultBranch = repo.default_branch || "main";
+    const dataRepo = await fetchGithubJson(`https://api.github.com/repos/${repoFullName}`, token);
+    const indexRepo = await fetchGithubJson(`https://api.github.com/repos/${indexRepoFullName}`, token);
+
+    const defaultBranch = dataRepo.default_branch || "main";
+    const indexDefaultBranch = indexRepo.default_branch || "main";
 
     const startResult = await query(`
       INSERT INTO repo_index_runs (
         user_id,
         repo_full_name,
+        index_repo_full_name,
         default_branch,
         sort_mode,
         status,
@@ -287,9 +480,9 @@ router.post("/prepare", async (req, res) => {
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, 'running', $5, $5, $5)
+      VALUES ($1, $2, $3, $4, $5, 'running', $6, $6, $6)
       RETURNING id
-    `, [userId, repoFullName, defaultBranch, sortMode, now]);
+    `, [userId, repoFullName, indexRepoFullName, defaultBranch, sortMode, now]);
 
     runId = startResult.rows[0].id;
 
@@ -299,7 +492,7 @@ router.post("/prepare", async (req, res) => {
     );
 
     const rawFiles = Array.isArray(tree.tree)
-      ? tree.tree.filter(item => item.type === "blob")
+      ? tree.tree.filter(item => item.type === "blob" && !isReservedAvdcIndexPath(item.path))
       : [];
 
     const discoveredAt = new Date().toISOString();
@@ -322,7 +515,6 @@ router.post("/prepare", async (req, res) => {
     });
 
     /*
-      Observação importante:
       A árvore simples do GitHub não traz data de criação do arquivo.
       Nesta versão, se o usuário escolher "mais recentes", buscamos a ÚLTIMA ALTERAÇÃO
       em modo conservador, só até AVDC_DATE_LOOKUP_LIMIT arquivos.
@@ -391,6 +583,18 @@ router.post("/prepare", async (req, res) => {
       ]);
     }
 
+    const writeResult = await writeIndexFilesToGithub({
+      token,
+      indexRepoFullName,
+      indexDefaultBranch,
+      dataRepoFullName: repoFullName,
+      dataDefaultBranch: defaultBranch,
+      sortMode,
+      runId,
+      files,
+      createdAt: discoveredAt
+    });
+
     const finishedAt = new Date().toISOString();
 
     await query(`
@@ -401,14 +605,24 @@ router.post("/prepare", async (req, res) => {
         truncated = $2,
         date_lookup_count = $3,
         date_lookup_limit = $4,
-        finished_at = $5,
-        updated_at = $5
-      WHERE id = $6
+        index_written = 1,
+        index_manifest_path = $5,
+        index_catalog_path = $6,
+        index_manifest_commit_sha = $7,
+        index_catalog_commit_sha = $8,
+        index_written_at = $9,
+        finished_at = $9,
+        updated_at = $9
+      WHERE id = $10
     `, [
       files.length,
       tree.truncated ? 1 : 0,
       dateLookupCount,
       sortMode === "updated_desc" ? dateLookupLimit : 0,
+      MANIFEST_PATH,
+      CATALOG_PATH,
+      writeResult.manifestResult.commitSha,
+      writeResult.catalogResult.commitSha,
       finishedAt,
       runId
     ]);

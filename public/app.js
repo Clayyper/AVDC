@@ -439,6 +439,7 @@ function clearCatalogView() {
   const statusLabel = $("catalog-status-label");
   const countLabel = $("catalog-files-count");
   const runDate = $("catalog-run-date");
+  const writtenLabel = $("catalog-written-label");
   const box = $("catalog-container");
   const indexRepoLabel = $("catalog-index-repo-label");
 
@@ -446,6 +447,7 @@ function clearCatalogView() {
   if (statusLabel) statusLabel.textContent = "Nenhum catálogo criado";
   if (countLabel) countLabel.textContent = "0";
   if (runDate) runDate.textContent = "-";
+  if (writtenLabel) writtenLabel.textContent = "Ainda não gravado";
   if (indexRepoLabel) indexRepoLabel.textContent = "Nenhum";
   if (box) box.innerHTML = "<p>Nenhum catálogo criado ainda.</p>";
 }
@@ -507,7 +509,7 @@ async function prepareCatalog() {
     renderCatalogRun(data.run);
     renderCatalogFiles(data.files || []);
 
-    let text = `Catálogo criado com ${data.run.filesCount} arquivo(s).`;
+    let text = `Catálogo criado com ${data.run.filesCount} arquivo(s) e gravado no repositório de índice.`;
 
     if (data.run.truncated) {
       text += " Atenção: o GitHub informou que a árvore foi truncada.";
@@ -533,6 +535,15 @@ function renderCatalogRun(run) {
   $("catalog-status-label").textContent = run.status || "-";
   $("catalog-files-count").textContent = String(run.filesCount ?? 0);
   $("catalog-run-date").textContent = formatDate(run.finishedAt || run.createdAt);
+
+  const writtenLabel = $("catalog-written-label");
+  if (writtenLabel) {
+    if (run.indexWritten) {
+      writtenLabel.textContent = `${run.indexRepoFullName || ""}/${run.indexCatalogPath || "avdc-index/catalog.json"}`;
+    } else {
+      writtenLabel.textContent = "Ainda não gravado";
+    }
+  }
 }
 
 function renderCatalogFiles(files) {
