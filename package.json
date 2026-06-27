@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "3.1.0",
-  "description": "AVDC v3.1 - Busca simples no conteúdo extraído",
+  "version": "3.2.0",
+  "description": "AVDC v3.2 - Destaque visual índigo do termo buscado",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

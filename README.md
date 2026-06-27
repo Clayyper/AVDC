@@ -1,53 +1,47 @@
-# AVDC v3.1 - Busca Simples no Conteúdo
+# AVDC v3.2 - Destaque Visual do Termo Buscado
 
-Esta versão parte da v3.0.2 validada.
+Esta versão parte da v3.1 validada.
 
-## Escopo da v3.1
+## Escopo da v3.2
+
+Alteração visual pequena e controlada na busca simples.
 
 Inclui:
 
-- Repositório de dados separado do repositório de índice.
-- Gravação em `/avdc-index/`.
-- Ignora `/avdc-index/` na catalogação.
-- Cria:
-  - `/avdc-index/manifest.json`
-  - `/avdc-index/catalog.json`
-  - `/avdc-index/search-index.json`
-- Tenta extrair texto simples de arquivos pequenos e compatíveis.
-- Busca por:
-  - nome do arquivo;
-  - caminho do arquivo;
-  - texto extraído quando disponível.
-- Resultado abre o arquivo original no GitHub.
+- Mantém o cartão de resultado exatamente no mesmo modelo da v3.1.
+- Mantém a busca por nome, caminho e conteúdo extraído.
+- Mostra uma mensagem abaixo da quantidade de resultados:
+  - "A busca exibe a primeira ocorrência encontrada em cada arquivo."
+- Destaca no trecho exibido o termo pesquisado com marca-texto índigo.
+- Se o termo aparece mais de uma vez no trecho exibido, todas as ocorrências visíveis são destacadas.
 
-## O que não faz ainda
+## Regra da busca
 
-- Não usa IA.
-- Não faz embeddings.
-- Não interpreta arquivos binários.
-- Não lê arquivos grandes por padrão.
-- Não mostra links internos do índice na interface.
+A busca retorna um resultado por arquivo encontrado.
 
-## Limites configuráveis
+Para cada arquivo, o trecho exibido parte da primeira ocorrência encontrada naquele arquivo.
 
-```env
-AVDC_CONTENT_FILE_LIMIT=80
-AVDC_MAX_FILE_BYTES=1048576
-AVDC_MAX_TEXT_CHARS=200000
-AVDC_DATE_LOOKUP_LIMIT=100
-```
+O AVDC pode destacar mais de uma ocorrência se elas estiverem visíveis dentro do mesmo trecho retornado.
 
-## Regra importante
+## O que não mudou
 
-Mesmo se o usuário usar o mesmo repositório como dados e índice, o AVDC ignora:
+- Não mudou a estrutura do cartão.
+- Não mudou a estrutura do índice.
+- Não mudou a forma de gravação em `/avdc-index/`.
+- Não adicionou IA.
+- Não alterou os repositórios originais fora da pasta reservada.
 
-```txt
-/avdc-index/
-.avdc-index/
-```
+## Teste da v3.2
 
-Assim ele não indexa o próprio índice.
-
-## Próxima etapa
-
-Depois desta versão, a próxima fase é estruturar melhor o conteúdo extraído e preparar a busca avançada/semântica com plugin de IA opcional.
+1. Subir a versão no GitHub.
+2. Confirmar `package.json` com versão `3.2.0`.
+3. Fazer deploy no Render.
+4. Entrar como usuário comum.
+5. Fazer uma busca, por exemplo:
+   - `inner join`
+   - `cliente`
+   - `progress`
+6. Conferir se:
+   - aparece a quantidade de resultados;
+   - abaixo aparece o aviso da primeira ocorrência por arquivo;
+   - o termo buscado aparece destacado em índigo dentro do trecho.

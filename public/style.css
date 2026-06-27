@@ -483,3 +483,22 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+
+.search-note {
+  margin: 10px 0 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+
+.term-highlight-indigo {
+  display: inline;
+  background: #4f46e5;
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}

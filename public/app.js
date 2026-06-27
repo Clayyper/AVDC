@@ -607,15 +607,16 @@ async function searchIndex() {
     }
 
     const data = await api(`/api/index/search?q=${encodeURIComponent(q)}`);
-    renderSearchResults(data.results || []);
+    const results = data.results || [];
 
-    msg("search-msg", `${(data.results || []).length} resultado(s) encontrado(s).`, "ok");
+    msg("search-msg", `${results.length} resultado(s) encontrado(s).`, "ok");
+    renderSearchResults(results, q);
   } catch (err) {
     msg("search-msg", err.message, "error");
   }
 }
 
-function renderSearchResults(results) {
+function renderSearchResults(results, searchTerm = "") {
   const box = $("search-results");
 
   if (!box) return;
@@ -625,12 +626,19 @@ function renderSearchResults(results) {
     return;
   }
 
-  box.innerHTML = results.map(result => `
+  const note = `
+    <p class="search-note">
+      A busca exibe a primeira ocorrência encontrada em cada arquivo.
+      Quando o termo aparece mais de uma vez no trecho exibido, todas as ocorrências visíveis são destacadas.
+    </p>
+  `;
+
+  box.innerHTML = note + results.map(result => `
     <div class="search-item">
       <div>
         <p><strong>${escapeHTML(result.name || "-")}</strong> <span class="badge">${escapeHTML(result.extension || "sem extensão")}</span></p>
         <p class="code">${escapeHTML(result.path || "-")}</p>
-        <p>${escapeHTML(result.snippet || "Resultado encontrado pelo nome ou caminho do arquivo.")}</p>
+        <p>${highlightSearchTerm(result.snippet || "Resultado encontrado pelo nome ou caminho do arquivo.", searchTerm)}</p>
         <p>${result.contentIndexed ? "Conteúdo pesquisável" : "Resultado pelo nome/caminho"}</p>
       </div>
       <div>
@@ -638,6 +646,34 @@ function renderSearchResults(results) {
       </div>
     </div>
   `).join("");
+}
+
+
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightSearchTerm(text, searchTerm) {
+  const raw = String(text ?? "");
+  const term = String(searchTerm ?? "").trim();
+
+  if (!term) {
+    return escapeHTML(raw);
+  }
+
+  const regex = new RegExp(`(${escapeRegex(term)})`, "gi");
+
+  return raw
+    .split(regex)
+    .map(part => {
+      if (part.toLowerCase() === term.toLowerCase()) {
+        return `<span class="term-highlight-indigo">${escapeHTML(part)}</span>`;
+      }
+
+      return escapeHTML(part);
+    })
+    .join("");
 }
 
 
