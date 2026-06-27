@@ -807,3 +807,33 @@ button:disabled,
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* ===== Motor de IA ===== */
+.ai-status-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ai-status-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .ai-status-panel,
+  .ai-status-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ai-status-actions {
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}

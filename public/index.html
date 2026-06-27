@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC V6.0.4 - IA opcional e Busca semântica</title>
+<title>AVDC V6.0.6 - IA opcional e Busca semântica</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">V6.0.4</div>
+  <div class="version-badge">V6.0.6</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -49,7 +49,7 @@
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">V6.0.4</div>
+  <div class="version-badge">V6.0.6</div>
 
   <div class="header">
     <div>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">V6.0.4</div>
+  <div class="version-badge">V6.0.6</div>
 
   <div class="header">
     <div>
@@ -296,11 +296,16 @@
     <h3>Motor de IA</h3>
     <p>Configuração opcional e separada por usuário. A busca simples não usa IA. A busca semântica só funciona depois desta conexão.</p>
 
-    <div class="note">
-      <p><strong>Status:</strong> <span id="ai-status-label" class="badge badge-warning">Não configurado</span></p>
-      <p><strong>Provedor:</strong> <span id="ai-provider-label" class="code">Nenhum</span></p>
-      <p><strong>Modelo:</strong> <span id="ai-model-label" class="code">Nenhum</span></p>
-      <p><strong>Configurado em:</strong> <span id="ai-connected-at-label">-</span></p>
+    <div class="note ai-status-panel">
+      <div>
+        <p><strong>Status:</strong> <span id="ai-status-label" class="badge badge-warning">Não configurado</span></p>
+        <p><strong>Provedor:</strong> <span id="ai-provider-label" class="code">Nenhum</span></p>
+        <p><strong>Modelo:</strong> <span id="ai-model-label" class="code">Nenhum</span></p>
+        <p><strong>Configurado em:</strong> <span id="ai-connected-at-label">-</span></p>
+      </div>
+      <div class="ai-status-actions">
+        <button class="btn btn-secondary" id="btn-test-ai-config" type="button">Testar conexão da IA salva</button>
+      </div>
     </div>
 
     <div class="form-grid">
@@ -335,11 +340,10 @@
 
     <div class="note">
       <p><strong>Como preencher:</strong> escolha o provedor, informe a URL base oficial do provedor, o modelo e a chave/token da sua conta. Exemplo OpenAI: URL base <span class="code">https://api.openai.com/v1</span>.</p>
-      <p>O botão de teste valida somente a conexão do Motor de IA. Ele não depende da busca semântica estar ativada.</p>
+      <p>O botão de teste usa a configuração já salva no banco para este usuário. Salve o Motor de IA antes de testar.</p>
     </div>
 
     <button class="btn btn-success" id="btn-save-ai-config">Salvar Motor de IA</button>
-    <button class="btn btn-secondary" id="btn-test-ai-config" type="button">Testar conexão da IA</button>
     <button class="btn btn-danger" id="btn-disconnect-ai">Desconectar IA</button>
 
     <div id="ai-msg" class="msg"></div>

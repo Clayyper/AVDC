@@ -147,3 +147,28 @@ Correção de interface da busca semântica:
 Correção de empacotamento: o patch agora inclui todos os módulos obrigatórios usados pelo `server.js`, incluindo `src/db.js`, `src/middleware.js` e rotas essenciais.
 
 Não altera a regra funcional da busca semântica ou do Motor de IA.
+
+
+## V6.0.5 — consolidação
+
+Versão consolidada a partir da V6.0.4.
+
+Mantém:
+- Motor de IA configurável por usuário.
+- Botão de teste de conexão no formulário Motor de IA.
+- Checkbox de busca semântica separado da configuração de IA.
+- Desabilitação dos controles da busca simples ao ativar busca semântica.
+- Formulário semântico com modos otimizada e completa.
+- Inclusão explícita das dependências obrigatórias usadas pelo `server.js`.
+
+Esta versão não muda o conceito funcional validado na V6.0.4; consolida a entrega como V6.0.5.
+
+
+## V6.0.6 — teste da IA salva no banco
+
+Ajuste pontual sobre a V6.0.5.
+
+- O botão de teste da IA foi movido para a parte superior do bloco Motor de IA, junto ao status da conexão.
+- O teste de conexão agora usa a configuração já salva no banco para o usuário logado.
+- O formulário de configuração continua separado: o usuário informa provedor, URL base, modelo e token, salva, e depois testa a conexão salva.
+- A busca semântica continua separada: só é ativada pelo checkbox e continua desabilitando os controles da busca simples quando marcada.

@@ -510,20 +510,15 @@ async function saveAiConfig() {
 
 async function testAiConfig() {
   try {
-    const provider = $("ai-provider").value;
-    const baseUrl = $("ai-base-url").value.trim();
-    const model = $("ai-model").value.trim();
-    const token = $("ai-token").value.trim();
-
     setDisabled("btn-test-ai-config", true);
-    msg("ai-msg", "Testando conexão do Motor de IA...", "ok");
+    msg("ai-msg", "Testando conexão da IA salva no banco para este usuário...", "ok");
 
     const data = await api("/api/ai/test", {
       method: "POST",
-      body: JSON.stringify({ provider, baseUrl, model, token })
+      body: JSON.stringify({ useSavedConfig: true })
     });
 
-    msg("ai-msg", data.message || "Conexão da IA testada com sucesso.", "ok");
+    msg("ai-msg", data.message || "Conexão da IA salva testada com sucesso.", "ok");
   } catch (err) {
     msg("ai-msg", err.message, "error");
   } finally {

@@ -84,6 +84,21 @@ function buildTransientAiConfig(body) {
   return { provider, baseUrl, model, token };
 }
 
+function buildSavedAiConfig(config) {
+  const provider = normalizeProvider(config?.aiProvider || config?.aiSite);
+  const baseUrl = normalizeBaseUrl(provider, config?.aiBaseUrl);
+  const model = String(config?.aiModel || "").trim();
+  const token = String(config?.aiToken || "").trim();
+
+  if (!baseUrl || !model || (provider !== "ollama" && !token)) {
+    const error = new Error("Motor de IA salvo incompleto. Salve provedor, URL base, modelo e token antes de testar.");
+    error.status = 400;
+    throw error;
+  }
+
+  return { provider, baseUrl, model, token };
+}
+
 async function callAiHealthCheck({ provider, baseUrl, model, token }) {
   const headers = {
     "Content-Type": "application/json",
@@ -201,14 +216,23 @@ router.post("/config", async (req, res) => {
 
 router.post("/test", async (req, res) => {
   try {
-    const config = buildTransientAiConfig(req.body || {});
+    let config;
+
+    if (req.body?.useSavedConfig !== false) {
+      const saved = await getUserAiConfig(req.session.user.id);
+      config = buildSavedAiConfig(saved);
+    } else {
+      config = buildTransientAiConfig(req.body || {});
+    }
+
     await callAiHealthCheck(config);
 
     res.json({
       ok: true,
       provider: config.provider,
       model: config.model,
-      message: "Conexão da IA testada com sucesso. O Motor de IA respondeu ao AVDC."
+      source: req.body?.useSavedConfig === false ? "form" : "database",
+      message: "Conexão da IA salva no banco testada com sucesso. O Motor de IA respondeu ao AVDC."
     });
   } catch (error) {
     console.error(error);
