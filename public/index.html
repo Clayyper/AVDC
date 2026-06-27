@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AVDC v2.6 - GitHub Connect</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="container login-container" id="login-screen">
+  <div class="version-badge">v2.6</div>
+
+  <h2>AVDC - Acesso</h2>
+  <p>Admin administra. Usuário entra com código e token.</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-admin">Administrador</button>
+    <button class="tab-btn" id="tab-user">Usuário comum</button>
+  </div>
+
+  <form id="form-admin">
+    <label>Usuário administrador</label>
+    <input id="admin-user" value="admin" required>
+
+    <label>Senha administrador</label>
+    <input id="admin-pass" type="password" placeholder="Senha inicial: admin123" required>
+
+    <button class="btn btn-full">Entrar como Admin</button>
+  </form>
+
+  <form id="form-user" class="hidden">
+    <label>Código do usuário</label>
+    <input id="login-user-code" placeholder="Ex: pedro.silva" required>
+
+    <label>Token do usuário</label>
+    <input id="login-user-token" placeholder="Token gerado pelo admin" required>
+
+    <button class="btn btn-full">Entrar como Usuário</button>
+  </form>
+
+  <div id="login-msg" class="msg"></div>
+
+  <div class="note">
+    <p><strong>Escopo desta versão:</strong></p>
+    <p>Usuário loga e conecta/desconecta/troca GitHub.</p>
+    <p>Ainda não lista repositórios.</p>
+  </div>
+</div>
+
+<div class="container hidden" id="admin-screen">
+  <div class="version-badge">v2.6</div>
+
+  <div class="header">
+    <div>
+      <h2>Painel Administrativo AVDC</h2>
+      <p>Logado como: <strong id="logged-as">admin</strong></p>
+    </div>
+
+    <button class="btn btn-danger" id="btn-admin-logout">Sair</button>
+  </div>
+
+  <div class="grid">
+    <nav class="menu">
+      <button data-page="dashboard" class="active">Resumo</button>
+      <button data-page="usuarios">Usuários</button>
+      <button data-page="senha">Senha Admin</button>
+      <button data-page="futuro">Próximas Etapas</button>
+    </nav>
+
+    <main>
+      <section id="page-dashboard">
+        <div class="card">
+          <h3>Resumo do Banco Administrativo</h3>
+
+          <div class="cards-row">
+            <div class="mini-card">
+              <strong id="total-users">0</strong>
+              <span>Usuários cadastrados</span>
+            </div>
+
+            <div class="mini-card">
+              <strong id="active-users">0</strong>
+              <span>Usuários ativos</span>
+            </div>
+          </div>
+
+          <div class="note">
+            <p>O cadastro do usuário pertence ao banco do AVDC.</p>
+            <p>A conexão GitHub é feita depois pelo próprio usuário.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-usuarios" class="hidden">
+        <div class="card">
+          <h3>Criar usuário</h3>
+          <p>O código do usuário é único. Não pode repetir.</p>
+
+          <div class="form-grid">
+            <div>
+              <label>Nome do usuário</label>
+              <input id="new-user-name" placeholder="Ex: Pedro Silva">
+            </div>
+
+            <div>
+              <label>Código único</label>
+              <div class="input-action">
+                <input id="new-user-code" placeholder="Ex: pedro.silva">
+                <button class="btn btn-secondary" id="btn-suggest-code" type="button">Sugerir</button>
+              </div>
+              <small>Use letras, números, ponto, hífen ou underline.</small>
+            </div>
+          </div>
+
+          <button class="btn btn-success" id="btn-create-user">Criar usuário e gerar token</button>
+
+          <div id="create-user-msg" class="msg"></div>
+
+          <div id="new-user-result" class="created-user-box hidden">
+            <h4>Usuário criado</h4>
+            <p><strong>Nome:</strong> <span id="created-name"></span></p>
+            <p><strong>Código:</strong> <span class="badge" id="created-code"></span></p>
+            <p><strong>Token:</strong> <span class="badge token-big" id="created-token"></span></p>
+            <button class="btn" id="btn-copy-created-token" type="button">Copiar token</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title-row">
+            <h3>Usuários cadastrados</h3>
+            <input id="user-filter" placeholder="Filtrar por nome ou código...">
+          </div>
+
+          <div id="users-container">
+            Nenhum usuário carregado.
+          </div>
+        </div>
+      </section>
+
+      <section id="page-senha" class="hidden">
+        <div class="card">
+          <h3>Trocar senha do administrador</h3>
+
+          <label>Nova senha</label>
+          <input id="new-admin-pass" type="password">
+
+          <button class="btn" id="btn-change-admin-pass">Salvar nova senha</button>
+
+          <div id="admin-pass-msg" class="msg"></div>
+        </div>
+      </section>
+
+      <section id="page-futuro" class="hidden">
+        <div class="card">
+          <h3>Próximas etapas</h3>
+
+          <div class="note">
+            <p><strong>Etapa 1:</strong> Banco administrativo. OK.</p>
+            <p><strong>Etapa 2:</strong> Login do usuário comum. OK.</p>
+            <p><strong>Etapa 3:</strong> Conexão GitHub do usuário. Esta versão.</p>
+            <p><strong>Etapa 4:</strong> Escolha de repositório.</p>
+            <p><strong>Etapa 5:</strong> Índice e busca.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="container hidden" id="user-screen">
+  <div class="version-badge">v2.6</div>
+
+  <div class="header">
+    <div>
+      <h2>Painel do Usuário AVDC</h2>
+      <p>Logado como: <strong id="user-logged-as">-</strong></p>
+    </div>
+
+    <button class="btn btn-danger" id="btn-user-logout">Sair</button>
+  </div>
+
+  <div class="card">
+    <h3>Acesso validado</h3>
+
+    <div class="note">
+      <p><strong>Nome:</strong> <span id="user-name-view">-</span></p>
+      <p><strong>Código:</strong> <span id="user-code-view" class="code">-</span></p>
+      <p><strong>Status:</strong> <span class="badge badge-ok">ativo</span></p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Conexão GitHub</h3>
+    <p>Esta etapa apenas conecta, desconecta ou troca a conta GitHub do usuário.</p>
+
+    <div id="github-box" class="github-box">
+      <p><strong>Status:</strong> <span id="github-status-label" class="badge badge-warning">Não conectado</span></p>
+      <div id="github-profile" class="hidden">
+        <img id="github-avatar" class="avatar" src="" alt="Avatar GitHub">
+        <div>
+          <p><strong>Conta:</strong> <span id="github-login" class="code">-</span></p>
+          <p><strong>Nome:</strong> <span id="github-name">-</span></p>
+          <p><strong>Conectado em:</strong> <span id="github-connected-at">-</span></p>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn" id="btn-connect-github">Conectar GitHub</button>
+    <button class="btn btn-warning hidden" id="btn-change-github">Trocar GitHub</button>
+    <button class="btn btn-danger hidden" id="btn-disconnect-github">Desconectar GitHub</button>
+
+    <div id="github-msg" class="msg"></div>
+
+    <div class="note">
+      <p>O GitHub conectado fica salvo no banco do usuário.</p>
+      <p>Na próxima etapa vamos listar os repositórios desta conta.</p>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
