@@ -753,3 +753,90 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 });
+
+// ====== ÍNDICE AVANÇADO ======
+
+let advancedFilters = {
+  extensions: [],
+  directories: [],
+  minSizeKB: 0,
+  maxSizeMB: 4,
+  pathContains: ""
+};
+
+$("btn-advanced-index").addEventListener("click", async () => {
+  $("advanced-index-modal").classList.remove("hidden");
+  await loadAdvancedFilterOptions();
+});
+
+$("btn-close-advanced-modal").addEventListener("click", () => {
+  $("advanced-index-modal").classList.add("hidden");
+});
+
+$("btn-cancel-advanced").addEventListener("click", () => {
+  $("advanced-index-modal").classList.add("hidden");
+});
+
+async function loadAdvancedFilterOptions() {
+  const msgEl = $("advanced-msg");
+  msgEl.textContent = "Carregando opções do repositório...";
+  msgEl.className = "msg ok";
+
+  try {
+    const data = await api("/api/index/scan");
+
+    const extensions = data.extensions || [];
+    const directories = data.directories || [];
+
+    const extList = $("extensions-list");
+    extList.innerHTML = extensions.length === 0
+      ? "<p>Nenhuma extensão encontrada.</p>"
+      : extensions.map(ext => `
+          <label class="filter-checkbox">
+            <input type="checkbox" class="ext-checkbox" value="${escapeAttr(ext)}" checked>
+            .${escapeHTML(ext || "(sem extensão)")}
+          </label>
+        `).join("");
+
+    const dirList = $("directories-list");
+    dirList.innerHTML = directories.length === 0
+      ? "<p>Nenhum diretório encontrado.</p>"
+      : directories.map(dir => `
+          <label class="filter-checkbox">
+            <input type="checkbox" class="dir-checkbox" value="${escapeAttr(dir)}" checked>
+            ${escapeHTML(dir)}
+          </label>
+        `).join("");
+
+    $("select-all-extensions").checked = true;
+    $("select-all-extensions").addEventListener("change", (e) => {
+      document.querySelectorAll(".ext-checkbox").forEach(cb => { cb.checked = e.target.checked; });
+    });
+
+    msgEl.textContent = `${extensions.length} extensão(ões) e ${directories.length} diretório(s) encontrado(s).`;
+    msgEl.className = "msg ok";
+  } catch (err) {
+    msgEl.textContent = "Erro ao carregar opções: " + err.message;
+    msgEl.className = "msg error";
+  }
+}
+
+$("btn-apply-advanced-filters").addEventListener("click", () => {
+  const selectedExtensions = Array.from(document.querySelectorAll(".ext-checkbox:checked")).map(cb => cb.value);
+  const selectedDirectories = Array.from(document.querySelectorAll(".dir-checkbox:checked")).map(cb => cb.value);
+  const minSizeKB = parseInt($("filter-min-size").value) || 0;
+  const maxSizeMB = parseInt($("filter-max-size").value) || 4;
+  const pathContains = $("filter-path-contains").value.trim();
+
+  advancedFilters = { extensions: selectedExtensions, directories: selectedDirectories, minSizeKB, maxSizeMB, pathContains };
+
+  const msgEl = $("advanced-msg");
+  msgEl.innerHTML = `
+    <strong>Filtros aplicados:</strong><br>
+    Extensões: ${selectedExtensions.length > 0 ? selectedExtensions.map(e => "." + e).join(", ") : "todas"}<br>
+    Diretórios: ${selectedDirectories.length > 0 ? selectedDirectories.join(", ") : "todos"}<br>
+    Tamanho: ${minSizeKB} KB a ${maxSizeMB} MB<br>
+    ${pathContains ? `Caminho contém: "${pathContains}"` : ""}
+  `;
+  msgEl.className = "msg ok";
+});

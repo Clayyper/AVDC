@@ -255,6 +255,7 @@
 
     <button class="btn btn-success" id="btn-prepare-catalog">Criar catálogo do índice</button>
     <button class="btn btn-secondary" id="btn-refresh-catalog">Atualizar visualização</button>
+    <button class="btn btn-info" id="btn-advanced-index">Índice Avançado</button>
 
     <div id="catalog-msg" class="msg"></div>
 
@@ -294,6 +295,53 @@
     </div>
   </div>
 
+</div>
+
+<!-- Modal Índice Avançado -->
+<div class="modal-overlay hidden" id="advanced-index-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Índice Avançado</h3>
+      <button class="modal-close" id="btn-close-advanced-modal"><script src="/app.js"></script>times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="advanced-msg" class="msg"></div>
+
+      <div class="filter-section">
+        <h4>Extensões</h4>
+        <div class="filter-toggle">
+          <label><input type="checkbox" id="select-all-extensions" checked> Selecionar todas</label>
+        </div>
+        <div class="extensions-grid" id="extensions-list">
+          <p>Carregando...</p>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Diretórios</h4>
+        <div class="directories-list" id="directories-list">
+          <p>Carregando...</p>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Tamanho do arquivo</h4>
+        <div class="filter-size">
+          <label>Mínimo (KB)<input type="number" id="filter-min-size" value="0" min="0"></label>
+          <label>Máximo (MB)<input type="number" id="filter-max-size" value="4" min="1"></label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Caminho contém</h4>
+        <input type="text" id="filter-path-contains" placeholder="Ex: GL, src, database...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btn-cancel-advanced">Cancelar</button>
+      <button class="btn btn-success" id="btn-apply-advanced-filters">Aplicar filtros</button>
+    </div>
+  </div>
 </div>
 
 <script src="/app.js"></script>
