@@ -596,12 +596,14 @@ async function prepareCatalog() {
   try {
     const sortMode = currentCatalogSortMode();
     const writeExtractionReport = !!$("catalog-write-extraction-report")?.checked;
+    const semanticSearch = !!$("catalog-semantic-search")?.checked;
+    const endpoint = semanticSearch ? "/api/index/prepare-semantic" : "/api/index/prepare";
 
-    msg("catalog-msg", "Criando catálogo. Aguarde...", "ok");
+    msg("catalog-msg", semanticSearch ? "Criando índice semântico. Esta opção pode demorar mais..." : "Criando catálogo. Aguarde...", "ok");
 
-    const data = await api("/api/index/prepare", {
+    const data = await api(endpoint, {
       method: "POST",
-      body: JSON.stringify({ sortMode, filters: advancedFilters, writeExtractionReport })
+      body: JSON.stringify({ sortMode, filters: advancedFilters, writeExtractionReport, mode: semanticSearch ? "semantic" : "simple" })
     });
 
     renderCatalogRun(data.run);
@@ -609,6 +611,10 @@ async function prepareCatalog() {
     renderExecutionTechnicalDetails(data.extractionDetails || []);
 
     let text = `Indexação concluída. Arquivos no catálogo: ${data.run.filesCount}. Conteúdo extraído: ${data.content?.indexed ?? 0}. Sem conteúdo extraído: ${data.content?.withoutContent ?? 0}.`;
+
+    if (data.run.mode === "semantic") {
+      text += ` Busca semântica preparada em ${data.run.indexSemanticSearchPath}. O índice simples não foi substituído.`;
+    }
 
     if (data.run.truncated) {
       text += " Atenção: o GitHub informou que a árvore foi truncada.";

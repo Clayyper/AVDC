@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC v5.0.5 - Interface e Catálogo</title>
+<title>AVDC v5.0.7 - Interface e Catálogo</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">v5.0.5</div>
+  <div class="version-badge">v5.0.7</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -49,7 +49,7 @@
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">v5.0.5</div>
+  <div class="version-badge">v5.0.7</div>
 
   <div class="header">
     <div>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">v5.0.5</div>
+  <div class="version-badge">v5.0.7</div>
 
   <div class="header">
     <div>
@@ -258,7 +258,12 @@
         <input type="checkbox" id="catalog-write-extraction-report">
         Salvar relatório técnico (.txt) no GitHub
       </label>
+      <label class="inline-checkbox semantic-checkbox">
+        <input type="checkbox" id="catalog-semantic-search">
+        Busca semântica
+      </label>
     </div>
+    <p class="semantic-warning">Busca semântica é uma preparação experimental e pode deixar a indexação mais pesada. Ela gera um índice separado e não substitui a busca simples.</p>
 
     <div class="catalog-actions-row">
       <div class="catalog-actions-left">
