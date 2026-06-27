@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.6",
-  "description": "AVDC V6.0.6 - teste IA pelo banco e ajuste visual",
+  "version": "6.0.7",
+  "description": "AVDC V6.0.7 - layout semântico antes do catálogo",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

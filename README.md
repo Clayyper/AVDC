@@ -164,7 +164,7 @@ Mantém:
 Esta versão não muda o conceito funcional validado na V6.0.4; consolida a entrega como V6.0.5.
 
 
-## V6.0.6 — teste da IA salva no banco
+## V6.0.7 — teste da IA salva no banco
 
 Ajuste pontual sobre a V6.0.5.
 
@@ -172,3 +172,11 @@ Ajuste pontual sobre a V6.0.5.
 - O teste de conexão agora usa a configuração já salva no banco para o usuário logado.
 - O formulário de configuração continua separado: o usuário informa provedor, URL base, modelo e token, salva, e depois testa a conexão salva.
 - A busca semântica continua separada: só é ativada pelo checkbox e continua desabilitando os controles da busca simples quando marcada.
+
+
+## V6.0.7 — busca semântica antes do catálogo
+
+- Preserva o teste de conexão da IA validado.
+- Move o quadro Motor de IA para cima do fluxo operacional.
+- Move o quadro Busca semântica para antes do Catálogo inicial do índice.
+- Mantém a regra: ao ativar busca semântica, os controles de catálogo, índice e busca simples abaixo ficam desabilitados.

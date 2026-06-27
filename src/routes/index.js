@@ -488,7 +488,7 @@ async function writeIndexFilesToGithub({
 
   const manifest = {
     avdc: {
-      version: "6.0.6",
+      version: "6.0.7",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -519,7 +519,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "6.0.6",
+      version: "6.0.7",
       type: "catalog"
     },
     source: {
@@ -549,7 +549,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "6.0.6",
+      version: "6.0.7",
       type: "simple-search-index",
       note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
     },

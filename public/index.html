@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AVDC V6.0.6 - IA opcional e Busca semântica</title>
+<title>AVDC V6.0.7 - IA opcional e Busca semântica</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container login-container" id="login-screen">
-  <div class="version-badge">V6.0.6</div>
+  <div class="version-badge">V6.0.7</div>
 
   <h2>AVDC - Acesso</h2>
   <p>Admin administra. Usuário entra com código e token.</p>
@@ -49,7 +49,7 @@
 </div>
 
 <div class="container hidden" id="admin-screen">
-  <div class="version-badge">V6.0.6</div>
+  <div class="version-badge">V6.0.7</div>
 
   <div class="header">
     <div>
@@ -169,7 +169,7 @@
 </div>
 
 <div class="container hidden" id="user-screen">
-  <div class="version-badge">V6.0.6</div>
+  <div class="version-badge">V6.0.7</div>
 
   <div class="header">
     <div>
@@ -238,59 +238,11 @@
     </div>
   </div>
 
-  <div class="card">
-    <h3>Catálogo inicial do índice</h3>
-    <p>Esta etapa cria uma lista organizada dos arquivos, tenta extrair texto simples quando possível e grava o resultado no repositório de índice, dentro de /avdc-index/.</p>
+  
 
-    <div class="form-grid">
-      <div>
-        <label>Ordenação do catálogo</label>
-        <select id="catalog-sort-mode">
-          <option value="alpha">Ordem alfabética A-Z</option>
-          <option value="updated_desc">Mais recentes primeiro pela última alteração no GitHub</option>
-        </select>
-        <small>Observação: a listagem simples do GitHub não entrega data de criação do arquivo. Nesta versão usamos última alteração quando disponível.</small>
-      </div>
-    </div>
+  
 
-    <div class="catalog-options-row">
-      <label class="inline-checkbox">
-        <input type="checkbox" id="catalog-write-extraction-report">
-        Salvar relatório técnico (.txt) no GitHub
-      </label>
-    </div>
-
-    <div class="catalog-actions-row">
-      <div class="catalog-actions-left">
-        <button class="btn btn-success" id="btn-prepare-catalog">Criar catálogo do índice</button>
-        <button class="btn btn-secondary" id="btn-refresh-catalog">Atualizar visualização</button>
-        <button class="btn" id="btn-advanced-index">Índice Avançado Consolidado</button>
-      </div>
-
-      <div class="catalog-actions-right">
-        <button class="btn btn-secondary btn-note" id="btn-open-note">Guardar nota</button>
-      </div>
-    </div>
-
-    <div id="catalog-msg" class="msg"></div>
-
-    <div id="execution-technical-container" class="execution-technical-container hidden"></div>
-
-    <div class="note">
-      <p><strong>Repositório de dados catalogado:</strong> <span id="catalog-repo-label" class="code">Nenhum</span></p>
-      <p><strong>Repositório de índice escolhido:</strong> <span id="catalog-index-repo-label" class="code">Nenhum</span></p>
-      <p><strong>Pasta reservada:</strong> <span class="code">/avdc-index/</span> — ignorada na catalogação.</p>
-      <p><strong>Arquivos gravados:</strong> <span id="catalog-written-label">Ainda não gravado</span></p>
-      <p><strong>Status:</strong> <span id="catalog-status-label">Nenhum catálogo criado</span></p>
-      <p><strong>Arquivos encontrados:</strong> <span id="catalog-files-count">0</span></p>
-      <p><strong>Última execução:</strong> <span id="catalog-run-date">-</span></p>
-    </div>
-
-    <div id="catalog-container" class="catalog-container">
-      <p>Nenhum catálogo criado ainda.</p>
-    </div>
-  </div>
-
+  
 
   <div class="card">
     <h3>Motor de IA</h3>
@@ -349,9 +301,11 @@
     <div id="ai-msg" class="msg"></div>
   </div>
 
+
   <div class="card">
     <h3>Busca semântica</h3>
     <p>Usa o Motor de IA configurado por este usuário para interpretar a intenção da pergunta. Se a IA não estiver configurada, a busca semântica não é simulada.</p>
+    <p>Este quadro fica antes do catálogo porque, quando a busca semântica estiver ativa, os controles de catálogo, índice e busca simples abaixo ficam bloqueados.</p>
 
     <div class="note">
       <label class="inline-checkbox">
@@ -388,6 +342,59 @@
     </div>
   </div>
 
+
+  <div class="card">
+    <h3>Catálogo inicial do índice</h3>
+    <p>Esta etapa cria uma lista organizada dos arquivos, tenta extrair texto simples quando possível e grava o resultado no repositório de índice, dentro de /avdc-index/.</p>
+
+    <div class="form-grid">
+      <div>
+        <label>Ordenação do catálogo</label>
+        <select id="catalog-sort-mode">
+          <option value="alpha">Ordem alfabética A-Z</option>
+          <option value="updated_desc">Mais recentes primeiro pela última alteração no GitHub</option>
+        </select>
+        <small>Observação: a listagem simples do GitHub não entrega data de criação do arquivo. Nesta versão usamos última alteração quando disponível.</small>
+      </div>
+    </div>
+
+    <div class="catalog-options-row">
+      <label class="inline-checkbox">
+        <input type="checkbox" id="catalog-write-extraction-report">
+        Salvar relatório técnico (.txt) no GitHub
+      </label>
+    </div>
+
+    <div class="catalog-actions-row">
+      <div class="catalog-actions-left">
+        <button class="btn btn-success" id="btn-prepare-catalog">Criar catálogo do índice</button>
+        <button class="btn btn-secondary" id="btn-refresh-catalog">Atualizar visualização</button>
+        <button class="btn" id="btn-advanced-index">Índice Avançado Consolidado</button>
+      </div>
+
+      <div class="catalog-actions-right">
+        <button class="btn btn-secondary btn-note" id="btn-open-note">Guardar nota</button>
+      </div>
+    </div>
+
+    <div id="catalog-msg" class="msg"></div>
+
+    <div id="execution-technical-container" class="execution-technical-container hidden"></div>
+
+    <div class="note">
+      <p><strong>Repositório de dados catalogado:</strong> <span id="catalog-repo-label" class="code">Nenhum</span></p>
+      <p><strong>Repositório de índice escolhido:</strong> <span id="catalog-index-repo-label" class="code">Nenhum</span></p>
+      <p><strong>Pasta reservada:</strong> <span class="code">/avdc-index/</span> — ignorada na catalogação.</p>
+      <p><strong>Arquivos gravados:</strong> <span id="catalog-written-label">Ainda não gravado</span></p>
+      <p><strong>Status:</strong> <span id="catalog-status-label">Nenhum catálogo criado</span></p>
+      <p><strong>Arquivos encontrados:</strong> <span id="catalog-files-count">0</span></p>
+      <p><strong>Última execução:</strong> <span id="catalog-run-date">-</span></p>
+    </div>
+
+    <div id="catalog-container" class="catalog-container">
+      <p>Nenhum catálogo criado ainda.</p>
+    </div>
+  </div>
 
   <div class="card">
     <h3>Busca simples</h3>
