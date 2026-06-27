@@ -1,7 +1,7 @@
 AVDC v4.4 - Fase 3: limpeza do banco e resíduos legados
 
-- package.json atualizado para 4.4.0.
-- /health em server.js atualizado para 4.4.0.
+- package.json atualizado para 4.4.1.
+- /health em server.js atualizado para 4.4.1.
 - db.js não cria mais repo_index_runs nem repo_index_files.
 - Índice GIN antigo não é mais criado pelo db.js.
 - Script manual adicionado: scripts/drop-client-tables.sql.

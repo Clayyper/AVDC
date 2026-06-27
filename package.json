@@ -1,6 +1,6 @@
 {
   "name": "avdc",
-  "version": "4.4.0",
+  "version": "4.4.1",
   "description": "AVDC v4.4 - Base consolidada com notas rápidas",
   "main": "server.js",
   "type": "commonjs",

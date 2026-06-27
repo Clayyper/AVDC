@@ -489,10 +489,36 @@ async function fetchIndexJson(indexRepoFullName, branch, filePath, token) {
     throw error;
   }
 
-  if (!data.content) return null;
+  let rawText = "";
+
+  if (data.content && data.encoding === "base64") {
+    rawText = fromBase64(String(data.content).replace(/\n/g, ""));
+  } else {
+    // Arquivos maiores podem não vir no campo `content` da API /contents.
+    // Nesse caso, buscamos o mesmo arquivo em modo raw, sem persistir nada localmente.
+    const rawResponse = await fetch(url, {
+      headers: {
+        ...githubHeaders(token),
+        "Accept": "application/vnd.github.raw+json"
+      }
+    });
+
+    if (rawResponse.status === 404) return null;
+
+    if (!rawResponse.ok) {
+      const message = `Erro ao ler conteúdo raw de ${filePath} no GitHub`;
+      const error = new Error(message);
+      error.status = rawResponse.status;
+      throw error;
+    }
+
+    rawText = await rawResponse.text();
+  }
+
+  if (!rawText.trim()) return null;
 
   try {
-    return JSON.parse(fromBase64(String(data.content).replace(/\n/g, "")));
+    return JSON.parse(rawText);
   } catch (parseError) {
     const error = new Error(`Conteúdo de ${filePath} não é JSON válido.`);
     error.status = 502;
