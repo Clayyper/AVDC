@@ -197,7 +197,7 @@ async function writeIndexFilesToGithub({
 }) {
   const manifest = {
     avdc: {
-      version: "3.0.0",
+      version: "3.0.2",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -225,7 +225,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "3.0.0",
+      version: "3.0.2",
       type: "catalog"
     },
     source: {
@@ -245,7 +245,9 @@ async function writeIndexFilesToGithub({
       sizeBytes: file.sizeBytes,
       sha: file.sha,
       githubUrl: file.githubUrl,
-      githubUpdatedAt: file.githubUpdatedAt
+      githubUpdatedAt: file.githubUpdatedAt,
+      discoveredAt: file.discoveredAt,
+      displayDate: file.githubUpdatedAt || file.discoveredAt
     }))
   };
 
@@ -311,7 +313,8 @@ function mapFile(row) {
     githubUrl: row.github_url,
     githubCreatedAt: row.github_created_at,
     githubUpdatedAt: row.github_updated_at,
-    discoveredAt: row.discovered_at
+    discoveredAt: row.discovered_at,
+    displayDate: row.github_updated_at || row.discovered_at
   };
 }
 
@@ -522,7 +525,14 @@ router.post("/prepare", async (req, res) => {
     const dateLookupLimit = Number(process.env.AVDC_DATE_LOOKUP_LIMIT || "100");
     let dateLookupCount = 0;
 
-    if (sortMode === "updated_desc") {
+    /*
+      v3.0.2:
+      Agora tentamos buscar a última alteração sempre, não apenas quando a ordenação
+      escolhida é "mais recentes". Isso evita coluna de data vazia na tela.
+      Para repositórios grandes, mantemos limite configurável.
+      Se não conseguirmos a data do GitHub, a interface usa discoveredAt como fallback.
+    */
+    {
       const limit = Math.max(0, Math.min(files.length, dateLookupLimit));
 
       for (let i = 0; i < limit; i++) {
@@ -618,7 +628,7 @@ router.post("/prepare", async (req, res) => {
       files.length,
       tree.truncated ? 1 : 0,
       dateLookupCount,
-      sortMode === "updated_desc" ? dateLookupLimit : 0,
+      dateLookupLimit,
       MANIFEST_PATH,
       CATALOG_PATH,
       writeResult.manifestResult.commitSha,

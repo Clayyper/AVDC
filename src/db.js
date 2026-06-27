@@ -149,6 +149,19 @@ async function initDatabase() {
     );
   `);
 
+
+  /*
+    v3.0.1 - Migração explícita para gravação do índice no GitHub.
+    Essas colunas ficam em repo_index_runs e registram onde o índice foi gravado.
+  */
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_repo_full_name TEXT;`);
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_written INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_manifest_path TEXT;`);
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_catalog_path TEXT;`);
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_manifest_commit_sha TEXT;`);
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_catalog_commit_sha TEXT;`);
+  await query(`ALTER TABLE repo_index_runs ADD COLUMN IF NOT EXISTS index_written_at TIMESTAMPTZ;`);
+
   await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_runs_user_repo ON repo_index_runs(user_id, repo_full_name, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_path ON repo_index_files(run_id, lower(path));`);
   await query(`CREATE INDEX IF NOT EXISTS idx_repo_index_files_run_ext ON repo_index_files(run_id, extension);`);

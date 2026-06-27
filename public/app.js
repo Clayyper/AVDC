@@ -515,8 +515,8 @@ async function prepareCatalog() {
       text += " Atenção: o GitHub informou que a árvore foi truncada.";
     }
 
-    if (sortMode === "updated_desc" && data.run.dateLookupLimit > 0) {
-      text += ` Datas de última alteração obtidas para ${data.run.dateLookupCount} arquivo(s), com limite de ${data.run.dateLookupLimit}.`;
+    if (data.run.dateLookupLimit > 0) {
+      text += ` Datas de última alteração obtidas para ${data.run.dateLookupCount} arquivo(s), com limite de ${data.run.dateLookupLimit}. Quando a data do GitHub não vier, o AVDC mostra a data de descoberta no índice.`;
     }
 
     msg("catalog-msg", text, "ok");
@@ -575,7 +575,7 @@ function renderCatalogFiles(files) {
               <td>${escapeHTML(file.extension || "-")}</td>
               <td class="code">${escapeHTML(file.path || "-")}</td>
               <td>${formatBytes(file.sizeBytes)}</td>
-              <td>${formatDate(file.githubUpdatedAt)}</td>
+              <td>${formatDate(file.displayDate || file.githubUpdatedAt || file.discoveredAt)}</td>
             </tr>
           `).join("")}
         </tbody>

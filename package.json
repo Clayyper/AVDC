@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "3.0.0",
-  "description": "AVDC v3.0 - Gravar catálogo do índice no repositório de índice",
+  "version": "3.0.2",
+  "description": "AVDC v3.0.2 - Correção das datas exibidas no catálogo",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

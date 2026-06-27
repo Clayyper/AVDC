@@ -1,6 +1,6 @@
-# AVDC v3.0 - Gravar Índice no GitHub
+# AVDC v3.0.2 - Gravar Índice no GitHub
 
-Esta versão parte da v2.9 validada.
+Esta versão corrige a migração da v3.0 para bancos que já tinham a tabela repo_index_runs criada.
 
 ## Escopo da v3.0
 
@@ -88,3 +88,37 @@ Mas a regra de produto é:
 ## Próxima versão sugerida
 
 v3.1: busca simples no catálogo gerado, abrindo o arquivo original no GitHub.
+
+
+## Correção v3.0.1
+
+Corrige a criação das colunas abaixo na tabela `repo_index_runs`:
+
+```sql
+index_repo_full_name
+index_written
+index_manifest_path
+index_catalog_path
+index_manifest_commit_sha
+index_catalog_commit_sha
+index_written_at
+```
+
+Essa correção resolve o erro:
+
+```txt
+column "index_repo_full_name" of relation "repo_index_runs" does not exist
+```
+
+
+## Correção v3.0.2
+
+Corrige a exibição de datas no catálogo.
+
+Antes, a data de última alteração só era buscada quando o usuário escolhia a ordenação por data. Em ordem alfabética, a coluna podia aparecer vazia.
+
+Agora:
+
+- o AVDC tenta buscar a última alteração no GitHub até o limite `AVDC_DATE_LOOKUP_LIMIT`;
+- o catálogo salvo inclui `githubUpdatedAt`, `discoveredAt` e `displayDate`;
+- se o GitHub não retornar a última alteração, a interface mostra a data em que o AVDC descobriu/catalogou o arquivo.
