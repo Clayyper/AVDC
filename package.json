@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "3.2.0",
-  "description": "AVDC v3.2 - Destaque visual índigo do termo buscado",
+  "version": "3.8.0",
+  "description": "AVDC v3.8 - Base consolidada de indexação avançada",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

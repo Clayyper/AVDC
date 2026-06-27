@@ -1,0 +1,2 @@
+Verificação de sintaxe JavaScript OK.
+Arquivos verificados: 10
