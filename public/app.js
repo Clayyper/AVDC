@@ -21,6 +21,7 @@ let catalogTechnicalIgnoredCount = 0;
 let cachedExecutionDetails = [];
 let executionDetailsVisible = false;
 let executionDetailsPage = 1;
+let userAiConfigured = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -316,7 +317,10 @@ async function changeAdminPassword() {
 async function loadUserProfile() {
   try {
     const data = await api("/api/user/profile");
-    renderGithubStatus(data.github); renderRepositoryStatus(data.repository); await loadLatestCatalog();
+    renderGithubStatus(data.github);
+    renderRepositoryStatus(data.repository);
+    renderAiStatus(data.ai);
+    await loadLatestCatalog();
   } catch (err) {
     msg("github-msg", err.message, "error");
   }
@@ -364,6 +368,139 @@ async function disconnectGithub() {
   } catch (err) {
     msg("github-msg", err.message, "error");
   }
+}
+
+
+function aiDefaultBaseUrl(provider) {
+  const defaults = {
+    "openrouter": "https://openrouter.ai/api/v1",
+    "groq": "https://api.groq.com/openai/v1",
+    "together": "https://api.together.xyz/v1"
+  };
+
+  return defaults[provider] || "";
+}
+
+function renderAiStatus(ai) {
+  const configured = !!ai?.configured;
+  userAiConfigured = configured;
+
+  const statusLabel = $("ai-status-label");
+  const providerLabel = $("ai-provider-label");
+  const modelLabel = $("ai-model-label");
+  const connectedAtLabel = $("ai-connected-at-label");
+  const semanticButton = $("btn-search-semantic");
+  const semanticBox = $("semantic-search-results");
+
+  if (statusLabel) {
+    statusLabel.textContent = configured ? "Configurado" : "Não configurado";
+    statusLabel.className = configured ? "badge badge-ok" : "badge badge-warning";
+  }
+
+  if (providerLabel) providerLabel.textContent = ai?.provider || "Nenhum";
+  if (modelLabel) modelLabel.textContent = ai?.model || "Nenhum";
+  if (connectedAtLabel) connectedAtLabel.textContent = formatDate(ai?.connectedAt);
+
+  if ($("ai-provider") && ai?.provider) $("ai-provider").value = ai.provider;
+  if ($("ai-base-url") && ai?.baseUrl) $("ai-base-url").value = ai.baseUrl;
+  if ($("ai-model") && ai?.model) $("ai-model").value = ai.model;
+  if ($("ai-token")) $("ai-token").value = "";
+
+  if (semanticButton) semanticButton.disabled = !configured;
+  if (!configured && semanticBox) {
+    semanticBox.innerHTML = "<p>Busca semântica indisponível: configure primeiro o Motor de IA deste usuário.</p>";
+  }
+}
+
+function updateAiBaseUrlSuggestion() {
+  const provider = $("ai-provider")?.value || "openai-compatible";
+  const base = $("ai-base-url");
+  if (!base) return;
+
+  const suggestion = aiDefaultBaseUrl(provider);
+  if (suggestion && !base.value.trim()) {
+    base.value = suggestion;
+  }
+}
+
+async function saveAiConfig() {
+  try {
+    const provider = $("ai-provider").value;
+    const baseUrl = $("ai-base-url").value.trim();
+    const model = $("ai-model").value.trim();
+    const token = $("ai-token").value.trim();
+
+    const data = await api("/api/ai/config", {
+      method: "POST",
+      body: JSON.stringify({ provider, baseUrl, model, token })
+    });
+
+    renderAiStatus(data.ai);
+    msg("ai-msg", "Motor de IA salvo para este usuário.", "ok");
+  } catch (err) {
+    msg("ai-msg", err.message, "error");
+  }
+}
+
+async function disconnectAi() {
+  if (!confirm("Desconectar o Motor de IA deste usuário?")) return;
+
+  try {
+    await api("/api/ai/disconnect", { method: "POST" });
+    renderAiStatus({ configured: false });
+    msg("ai-msg", "Motor de IA desconectado.", "ok");
+  } catch (err) {
+    msg("ai-msg", err.message, "error");
+  }
+}
+
+async function searchSemanticIndex() {
+  try {
+    const q = $("semantic-search-query").value.trim();
+
+    if (!q) {
+      msg("semantic-search-msg", "Digite uma pergunta para a busca semântica.", "error");
+      return;
+    }
+
+    if (!userAiConfigured) {
+      msg("semantic-search-msg", "Busca semântica indisponível. Configure primeiro o Motor de IA deste usuário.", "error");
+      return;
+    }
+
+    const data = await api(`/api/index/search-semantic?q=${encodeURIComponent(q)}`);
+    const results = data.results || [];
+
+    msg("semantic-search-msg", `${results.length} resultado(s) semântico(s) encontrado(s). Motor: ${data.provider || "-"} / ${data.model || "-"}.`, "ok");
+    renderSemanticSearchResults(results, q);
+  } catch (err) {
+    msg("semantic-search-msg", err.message, "error");
+  }
+}
+
+function renderSemanticSearchResults(results, searchTerm = "") {
+  const box = $("semantic-search-results");
+
+  if (!box) return;
+
+  if (!results || results.length === 0) {
+    box.innerHTML = "<p>Nenhum resultado semântico encontrado.</p>";
+    return;
+  }
+
+  box.innerHTML = results.map(result => `
+    <div class="search-item">
+      <div>
+        <p><strong>${escapeHTML(result.name || "-")}</strong> <span class="badge">${escapeHTML(result.extension || "sem extensão")}</span></p>
+        <p class="code">${escapeHTML(result.path || "-")}</p>
+        <p>${highlightSearchTerm(result.snippet || "Resultado indicado pela busca semântica.", searchTerm)}</p>
+        <p><strong>Motivo semântico:</strong> ${escapeHTML(result.semanticReason || "Relevante para a pergunta.")}</p>
+      </div>
+      <div>
+        <a class="btn btn-secondary" href="${escapeAttr(result.githubUrl || "#")}" target="_blank" rel="noopener noreferrer">Abrir arquivo</a>
+      </div>
+    </div>
+  `).join("");
 }
 
 
@@ -1040,6 +1177,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("catalog-sort-mode").onchange = refreshCatalogView;
   $("btn-search-index").onclick = searchIndex;
   $("search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchIndex(); });
+  $("btn-save-ai-config").onclick = saveAiConfig;
+  $("btn-disconnect-ai").onclick = disconnectAi;
+  $("ai-provider").onchange = updateAiBaseUrlSuggestion;
+  $("btn-search-semantic").onclick = searchSemanticIndex;
+  $("semantic-search-query").addEventListener("keydown", (event) => { if (event.key === "Enter") searchSemanticIndex(); });
 
   // ====== GUARDAR NOTA ======
 

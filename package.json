@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "5.0.5",
-  "description": "AVDC v5.0.5.5 - Validação de repositórios técnicos e interface limpa",
+  "version": "6.0.0",
+  "description": "AVDC V6 - IA genérica opcional por usuário e base v5.0.6 validada",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

@@ -33,7 +33,12 @@ router.get("/profile", async (req, res) => {
         selected_data_repo_full_name AS "selectedDataRepoFullName",
         selected_index_repo_full_name AS "selectedIndexRepoFullName",
         index_path AS "indexPath",
-        ai_site AS "aiSite"
+        ai_site AS "aiSite",
+        ai_provider AS "aiProvider",
+        ai_base_url AS "aiBaseUrl",
+        ai_model AS "aiModel",
+        ai_token_encrypted AS "aiToken",
+        ai_connected_at AS "aiConnectedAt"
       FROM user_future_config
       WHERE user_id = $1
     `, [userId]);
@@ -55,6 +60,13 @@ router.get("/profile", async (req, res) => {
       future: {
         indexPath: config?.indexPath || null,
         aiSite: config?.aiSite || null
+      },
+      ai: {
+        configured: !!(config?.aiProvider && config?.aiBaseUrl && config?.aiModel && (config?.aiToken || config?.aiProvider === "ollama")),
+        provider: config?.aiProvider || config?.aiSite || null,
+        baseUrl: config?.aiBaseUrl || null,
+        model: config?.aiModel || null,
+        connectedAt: config?.aiConnectedAt || null
       }
     });
   } catch (error) {

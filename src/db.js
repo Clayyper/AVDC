@@ -72,7 +72,11 @@ async function initDatabase() {
       index_location TEXT,
       index_path TEXT,
       ai_site TEXT,
+      ai_provider TEXT,
+      ai_base_url TEXT,
+      ai_model TEXT,
       ai_token_encrypted TEXT,
+      ai_connected_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
@@ -104,7 +108,11 @@ async function initDatabase() {
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS index_location TEXT;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS index_path TEXT;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_site TEXT;`);
+  await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_provider TEXT;`);
+  await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_base_url TEXT;`);
+  await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_model TEXT;`);
   await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_token_encrypted TEXT;`);
+  await query(`ALTER TABLE user_future_config ADD COLUMN IF NOT EXISTS ai_connected_at TIMESTAMPTZ;`);
 
   /*
     v4.4 - Refactor de privacidade (Fase 3).

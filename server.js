@@ -1,6 +1,6 @@
 /**
- * AVDC v5.0.5
- * PostgreSQL + login admin/usuário + conexão GitHub do usuário.
+ * AVDC V6
+ * PostgreSQL + login admin/usuário + GitHub do usuário + IA opcional por usuário.
  *
  * Escopo desta etapa:
  * - Usuário loga com código + token.
@@ -9,8 +9,8 @@
  * - AVDC salva login/token GitHub no banco do usuário.
  * - Usuário pode desconectar/trocar a conta GitHub.
  *
- * Agora grava o índice no GitHub e permite busca simples no conteúdo extraído.
  * Grava manifest, catálogo e índice simples de busca dentro de /avdc-index/.
+ * V6 inicia a configuração genérica de IA por usuário, sem prender ao .env/OpenAI.
  */
 
 require("dotenv").config();
@@ -25,6 +25,7 @@ const adminRoutes = require("./src/routes/admin");
 const userRoutes = require("./src/routes/user");
 const githubRoutes = require("./src/routes/github");
 const indexRoutes = require("./src/routes/index");
+const aiRoutes = require("./src/routes/ai");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,15 +50,17 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/user", userRoutes);
 app.use("/auth/github", githubRoutes);
 app.use("/api/index", indexRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
     app: "AVDC",
-    version: "5.0.5",
-    module: "interface-listagens-recolhiveis-paginacao",
+    version: "6.0.0",
+    module: "v6-ia-generica-opcional-por-usuario",
     database: process.env.DATABASE_URL ? "postgres" : "not-configured",
-    githubConfigured: !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET && process.env.GITHUB_CALLBACK_URL)
+    githubConfigured: !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET && process.env.GITHUB_CALLBACK_URL),
+    aiMode: "user-configured-optional"
   });
 });
 
@@ -66,7 +69,7 @@ async function start() {
     await initDatabase();
 
     app.listen(PORT, () => {
-      console.log(`AVDC v5.0.5 rodando na porta ${PORT}`);
+      console.log(`AVDC V6 rodando na porta ${PORT}`);
     });
   } catch (error) {
     console.error("Erro ao iniciar AVDC:", error);

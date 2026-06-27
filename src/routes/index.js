@@ -89,7 +89,11 @@ async function getUserGithubConfig(userId) {
       github_token_encrypted AS "githubToken",
       selected_repo_full_name AS "selectedRepoFullName",
       selected_data_repo_full_name AS "selectedDataRepoFullName",
-      selected_index_repo_full_name AS "selectedIndexRepoFullName"
+      selected_index_repo_full_name AS "selectedIndexRepoFullName",
+      ai_provider AS "aiProvider",
+      ai_base_url AS "aiBaseUrl",
+      ai_model AS "aiModel",
+      ai_token_encrypted AS "aiToken"
     FROM user_future_config
     WHERE user_id = $1
   `, [userId]);
@@ -277,7 +281,7 @@ function buildExtractionReportText({
   const indexedCount = (files || []).filter(file => file.contentIndexed).length;
 
   const lines = [];
-  lines.push("AVDC v5.0 - Relatório técnico de extração");
+  lines.push("AVDC V6 - Relatório técnico de extração");
   lines.push("");
   lines.push("Este relatório foi salvo no GitHub porque o usuário marcou essa opção antes da indexação.");
   lines.push("Para visualizar este relatório novamente, acesse diretamente o repositório de índice no GitHub.");
@@ -484,7 +488,7 @@ async function writeIndexFilesToGithub({
 
   const manifest = {
     avdc: {
-      version: "5.0.6",
+      version: "6.0.0",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -515,7 +519,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "5.0.6",
+      version: "6.0.0",
       type: "catalog"
     },
     source: {
@@ -545,7 +549,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "5.0.6",
+      version: "6.0.0",
       type: "simple-search-index",
       note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
     },
@@ -745,6 +749,89 @@ function scoreIndexFile(file, terms) {
   return score;
 }
 
+function hasUserAiConfigured(config) {
+  return !!(config?.aiProvider && config?.aiBaseUrl && config?.aiModel && (config?.aiToken || config?.aiProvider === "ollama"));
+}
+
+function aiChatCompletionsUrl(baseUrl) {
+  return `${String(baseUrl || "").replace(/\/+$/, "")}/chat/completions`;
+}
+
+function semanticCandidateFiles(files, query) {
+  const terms = tokenize(query);
+  const scored = (files || [])
+    .map(file => ({ file, score: scoreIndexFile(file, terms) }))
+    .sort((a, b) => b.score - a.score || String(a.file.path || "").localeCompare(String(b.file.path || "")));
+
+  const positive = scored.filter(item => item.score > 0).slice(0, 40);
+  const fallback = scored.slice(0, 40);
+  return (positive.length > 0 ? positive : fallback).map(item => item.file);
+}
+
+function buildSemanticPrompt(query, candidates) {
+  const compact = candidates.map((file, index) => ({
+    id: index + 1,
+    path: file.path,
+    name: file.name,
+    extension: file.extension,
+    preview: safePreview(file.text || file.preview || file.path, 900)
+  }));
+
+  return [
+    "Você é o motor semântico do AVDC.",
+    "Avalie quais arquivos parecem mais relevantes para a pergunta do usuário.",
+    "Responda somente JSON válido no formato: {\"results\":[{\"id\":1,\"score\":0.95,\"reason\":\"explicação curta\"}]}",
+    "Use apenas os candidatos fornecidos. Não invente caminhos.",
+    "",
+    `Pergunta: ${query}`,
+    "",
+    `Candidatos: ${JSON.stringify(compact)}`
+  ].join("\n");
+}
+
+async function callUserAiForSemanticSearch(config, query, candidates) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+  };
+
+  if (config.aiToken) {
+    headers.Authorization = `Bearer ${config.aiToken}`;
+  }
+
+  const response = await fetch(aiChatCompletionsUrl(config.aiBaseUrl), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: config.aiModel,
+      temperature: 0.1,
+      messages: [
+        { role: "system", content: "Você classifica candidatos por relevância semântica para o AVDC." },
+        { role: "user", content: buildSemanticPrompt(query, candidates) }
+      ]
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = data.error?.message || data.message || `Motor de IA respondeu com status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "";
+  const jsonText = String(content).replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+
+  try {
+    const parsed = JSON.parse(jsonText);
+    return Array.isArray(parsed.results) ? parsed.results : [];
+  } catch {
+    return [];
+  }
+}
+
 router.get("/latest", async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -888,6 +975,82 @@ router.get("/search", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(error.status || 500).json({ error: error.message || "Erro ao buscar no índice." });
+  }
+});
+
+
+router.get("/search-semantic", async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const q = String(req.query.q || "").trim();
+
+    if (!q) {
+      return res.status(400).json({ error: "Digite uma pergunta ou termo para a busca semântica." });
+    }
+
+    const config = await getUserGithubConfig(userId);
+    const selectedDataRepoFullName = config?.selectedDataRepoFullName || config?.selectedRepoFullName || null;
+    const selectedIndexRepoFullName = config?.selectedIndexRepoFullName || null;
+
+    if (!hasUserAiConfigured(config)) {
+      return res.status(400).json({
+        error: "Busca semântica indisponível. Configure primeiro o Motor de IA deste usuário. A busca simples continua disponível sem IA."
+      });
+    }
+
+    if (!selectedDataRepoFullName) {
+      return res.status(400).json({ error: "Nenhum repositório de dados selecionado." });
+    }
+
+    if (!selectedIndexRepoFullName || !config?.githubToken) {
+      return res.status(400).json({ error: "Nenhum repositório de índice selecionado." });
+    }
+
+    const { searchIndex } = await loadIndexFromGithub(config, config.githubToken);
+
+    if (!searchIndex || !Array.isArray(searchIndex.files)) {
+      return res.status(400).json({ error: "Nenhum índice de busca encontrado. Crie o catálogo primeiro." });
+    }
+
+    const candidates = semanticCandidateFiles(searchIndex.files, q);
+
+    if (candidates.length === 0) {
+      return res.json({ ok: true, query: q, semantic: true, provider: config.aiProvider, model: config.aiModel, results: [] });
+    }
+
+    const aiResults = await callUserAiForSemanticSearch(config, q, candidates);
+    const candidateById = new Map(candidates.map((file, index) => [String(index + 1), file]));
+
+    const results = aiResults
+      .map(item => {
+        const file = candidateById.get(String(item.id));
+        if (!file) return null;
+        return {
+          score: Number(item.score || 0),
+          name: file.name,
+          path: file.path,
+          extension: file.extension,
+          githubUrl: file.githubUrl,
+          contentIndexed: true,
+          semanticReason: String(item.reason || "Relevante para a busca semântica.").slice(0, 220),
+          snippet: makeSnippet(file.text || file.preview || file.path, tokenize(q)) || safePreview(file.text || file.preview || file.path, 420)
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+
+    res.json({
+      ok: true,
+      query: q,
+      semantic: true,
+      provider: config.aiProvider,
+      model: config.aiModel,
+      results
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(error.status || 500).json({ error: error.message || "Erro na busca semântica." });
   }
 });
 
