@@ -1,21 +1,39 @@
-# AVDC V6.0.12 — Patch de correção do fallback semântico
+# AVDC V6.0.12 — Hotfix deploy Render + tokens da busca semântica
 
-## Objetivo
-Corrigir resultados ruins da busca semântica quando a IA não retorna JSON estruturado e o AVDC usa fallback local.
+Este patch corrige o erro de deploy:
 
-## Arquivos alterados
-- package.json
-- src/routes/index.js
-- README.md
-- checkpoints/CHECKPOINT_V6_0_12_FILTRO_FALLBACK_SEMANTICO.md
+```txt
+Error: Cannot find module './src/db'
+```
 
-## Como aplicar
-Copie os arquivos deste patch sobre a base V6.0.11 ou suba o ZIP completo V6.0.12.
+## Causa
+
+O `server.js` chama `./src/db`, mas o patch anterior aplicado no Render não levou `src/db.js`.
 
 ## Correção
-- Remove candidatos técnicos/ocultos do fallback semântico.
-- Bloqueia `.gitkeep`, `.keep`, `.DS_Store`, `Thumbs.db` e caminhos `.git/`.
-- Mantém bloqueio de `/avdc-index/` e `.avdc-index/`.
-- Penaliza `/avdc-notes/*.vcd` para não dominar resultados de arquivos originais.
-- Impede fallback com score zero.
-- Se não houver candidato textual positivo, retorna vazio em vez de mostrar lixo.
+
+Este patch inclui todos os arquivos obrigatórios para o `server.js` iniciar:
+
+- `server.js`
+- `package.json`
+- `src/db.js`
+- `src/middleware.js`
+- `src/routes/auth.js`
+- `src/routes/admin.js`
+- `src/routes/user.js`
+- `src/routes/github.js`
+- `src/routes/index.js`
+- `src/routes/ai.js`
+- `public/index.html`
+- `public/app.js`
+- `public/style.css`
+
+Também preserva a correção da V6.0.9:
+
+- compactação da busca semântica;
+- limite de candidatos enviados à IA;
+- tratamento de erro de TPM/tokens.
+
+## Recomendação
+
+Se o Render já está com base incompleta, prefira subir o ZIP completo `AVDC-main-V6.0.12.zip`.
