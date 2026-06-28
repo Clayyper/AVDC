@@ -1,19 +1,28 @@
-# AVDC V6.0.14
+# AVDC V6.0.17
 
-Versão de hotfix da V6 com foco na busca semântica completa.
+Hotfix arquitetural: índice semântico separado.
 
-## Correção principal
+## Premissa consolidada
 
-A busca semântica completa não deve retornar zero quando existem candidatos textuais no índice e a busca otimizada consegue encontrar resultados.
+O diretório técnico continua sendo:
 
-## Ajustes
+- `/avdc-index/`
 
-- Ranqueamento de resgate mais amplo para o modo completo.
-- Tolerância maior para busca parcial, como `brada` encontrando `bradesco`.
-- Fallback mais seguro quando a IA não retorna JSON estruturado.
-- Bloqueio preservado para arquivos técnicos (`.gitkeep`, `.git/`, `/avdc-index/`, `.avdc-index/`).
-- Penalização preservada para notas `.vcd`, sem bloqueio total.
+Mas os índices ficam separados:
 
-## Base
+- `/avdc-index/catalog.json` — catálogo/listagem.
+- `/avdc-index/search-index.json` — busca simples.
+- `/avdc-index/semantic-index.json` — busca semântica.
+- `/avdc-index/manifest.json` — manifesto técnico.
 
-Derivada da V6.0.13.
+## Correção
+
+A rota de geração do catálogo agora grava também `/avdc-index/semantic-index.json`.
+
+A rota `/search-semantic` deixa de usar `search-index.json` e passa a usar o índice semântico separado.
+
+## Ação obrigatória após deploy
+
+Depois de subir a V6.0.17, clique em **Criar catálogo do índice** para regenerar os arquivos no GitHub.
+
+Sem essa regeneração, a busca semântica pode retornar `SEMANTIC_INDEX_NOT_FOUND` ou `EMPTY_SEMANTIC_INDEX`.

@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.14",
-  "description": "AVDC V6.0.14 - hotfix busca semântica sem zero indevido e versão consolidada",
+  "version": "6.0.17",
+  "description": "AVDC V6.0.17 - índice semântico separado",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

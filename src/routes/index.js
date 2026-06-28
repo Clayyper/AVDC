@@ -13,6 +13,7 @@ const AVDC_INDEX_DIR = "avdc-index";
 const MANIFEST_PATH = `${AVDC_INDEX_DIR}/manifest.json`;
 const CATALOG_PATH = `${AVDC_INDEX_DIR}/catalog.json`;
 const SEARCH_INDEX_PATH = `${AVDC_INDEX_DIR}/search-index.json`;
+const SEMANTIC_INDEX_PATH = `${AVDC_INDEX_DIR}/semantic-index.json`;
 const EXTRACTION_REPORT_PATH = `${AVDC_INDEX_DIR}/extraction-report.txt`;
 
 const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
@@ -558,24 +559,93 @@ function buildSearchableFiles(files) {
   let used = 0;
 
   return (files || [])
-    .filter(file => file.contentIndexed && file.contentText)
+    .filter(file => !isHiddenOrTechnicalPath(file.path || file.name))
     .map(file => {
-      const remaining = Math.max(0, maxTotal - used);
-      const limit = Math.min(maxPerFile, remaining);
-      const text = String(file.contentText || "").slice(0, limit);
-      used += text.length;
+      const originalText = String(file.contentText || "");
+      const hasContent = !!(file.contentIndexed && originalText.trim());
+      const fallbackText = [
+        file.name,
+        file.path,
+        file.extension ? `extensao ${file.extension}` : ""
+      ].filter(Boolean).join(" ");
+
+      let text = "";
+      let textTruncated = false;
+
+      if (hasContent) {
+        const remaining = Math.max(0, maxTotal - used);
+        const limit = Math.min(maxPerFile, remaining);
+        text = originalText.slice(0, limit);
+        used += text.length;
+        textTruncated = originalText.length > text.length;
+      } else {
+        // O índice simples continua tendo metadados mínimos para não ficar vazio,
+        // mas ele é separado do índice semântico. A busca semântica não lê este arquivo.
+        text = fallbackText;
+      }
 
       return {
         path: file.path,
         name: file.name,
         extension: file.extension,
         githubUrl: file.githubUrl,
-        preview: file.contentPreview,
+        preview: file.contentPreview || fallbackText,
         text,
-        textTruncated: String(file.contentText || "").length > text.length
+        contentIndexed: !!file.contentIndexed,
+        metadataOnly: !hasContent,
+        textTruncated
       };
     })
-    .filter(file => file.text.length > 0);
+    .filter(file => String(file.text || file.preview || file.path || file.name || "").trim().length > 0);
+}
+
+function buildSemanticIndexFiles(files) {
+  const maxPerFile = envNumber("AVDC_MAX_SEMANTIC_TEXT_CHARS", envNumber("AVDC_MAX_SEARCH_TEXT_CHARS", DEFAULT_MAX_SEARCH_TEXT_CHARS));
+  const maxTotal = envNumber("AVDC_MAX_SEMANTIC_INDEX_TOTAL_CHARS", envNumber("AVDC_MAX_SEARCH_INDEX_TOTAL_CHARS", DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS));
+  let used = 0;
+
+  return (files || [])
+    .filter(file => !isHiddenOrTechnicalPath(file.path || file.name))
+    .map(file => {
+      const originalText = String(file.contentText || "");
+      const hasContent = !!(file.contentIndexed && originalText.trim());
+      const fallbackText = [
+        file.name,
+        file.path,
+        file.extension ? `extensao ${file.extension}` : "",
+        file.directory ? `diretorio ${file.directory}` : ""
+      ].filter(Boolean).join(" ");
+
+      let text = "";
+      let textTruncated = false;
+
+      if (hasContent) {
+        const remaining = Math.max(0, maxTotal - used);
+        const limit = Math.min(maxPerFile, remaining);
+        text = originalText.slice(0, limit);
+        used += text.length;
+        textTruncated = originalText.length > text.length;
+      } else {
+        // Premissa da V6.0.17: o índice semântico é separado, mas nunca vazio
+        // quando o catálogo tem arquivos válidos. Arquivos sem conteúdo entram
+        // com metadados pesquisáveis para seleção de candidatos antes da IA.
+        text = fallbackText;
+      }
+
+      return {
+        path: file.path,
+        directory: file.directory,
+        name: file.name,
+        extension: file.extension,
+        githubUrl: file.githubUrl,
+        preview: file.contentPreview || fallbackText,
+        text,
+        contentIndexed: !!file.contentIndexed,
+        metadataOnly: !hasContent,
+        textTruncated
+      };
+    })
+    .filter(file => String(file.text || file.preview || file.path || file.name || "").trim().length > 0);
 }
 
 async function writeIndexFilesToGithub({
@@ -591,10 +661,13 @@ async function writeIndexFilesToGithub({
   writeExtractionReport = false
 }) {
   const searchableFiles = buildSearchableFiles(files);
+  const semanticFiles = buildSemanticIndexFiles(files);
+  const metadataOnlyFilesCount = searchableFiles.filter(file => file.metadataOnly).length;
+  const semanticMetadataOnlyFilesCount = semanticFiles.filter(file => file.metadataOnly).length;
 
   const manifest = {
     avdc: {
-      version: "6.0.14",
+      version: "6.0.17",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -609,6 +682,7 @@ async function writeIndexFilesToGithub({
       manifestPath: MANIFEST_PATH,
       catalogPath: CATALOG_PATH,
       searchIndexPath: SEARCH_INDEX_PATH,
+      semanticIndexPath: SEMANTIC_INDEX_PATH,
       extractionReportPath: writeExtractionReport ? EXTRACTION_REPORT_PATH : null
     },
     run: {
@@ -616,8 +690,13 @@ async function writeIndexFilesToGithub({
       sortMode,
       filesCount: files.length,
       searchableFilesCount: searchableFiles.length,
+      semanticFilesCount: semanticFiles.length,
+      metadataOnlyFilesCount,
+      semanticMetadataOnlyFilesCount,
       searchIndexTextLimitPerFile: envNumber("AVDC_MAX_SEARCH_TEXT_CHARS", DEFAULT_MAX_SEARCH_TEXT_CHARS),
       searchIndexTextLimitTotal: envNumber("AVDC_MAX_SEARCH_INDEX_TOTAL_CHARS", DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS),
+      semanticIndexTextLimitPerFile: envNumber("AVDC_MAX_SEMANTIC_TEXT_CHARS", envNumber("AVDC_MAX_SEARCH_TEXT_CHARS", DEFAULT_MAX_SEARCH_TEXT_CHARS)),
+      semanticIndexTextLimitTotal: envNumber("AVDC_MAX_SEMANTIC_INDEX_TOTAL_CHARS", envNumber("AVDC_MAX_SEARCH_INDEX_TOTAL_CHARS", DEFAULT_MAX_SEARCH_INDEX_TOTAL_CHARS)),
       extractionReportEnabled: !!writeExtractionReport,
       createdAt
     }
@@ -625,7 +704,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "6.0.14",
+      version: "6.0.17",
       type: "catalog"
     },
     source: {
@@ -655,9 +734,9 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "6.0.14",
+      version: "6.0.17",
       type: "simple-search-index",
-      note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
+      note: "Índice da busca simples. A busca semântica usa arquivo separado em /avdc-index/semantic-index.json."
     },
     source: {
       dataRepository: dataRepoFullName,
@@ -665,6 +744,20 @@ async function writeIndexFilesToGithub({
     },
     generatedAt: createdAt,
     files: searchableFiles
+  };
+
+  const semanticIndex = {
+    avdc: {
+      version: "6.0.17",
+      type: "semantic-search-index",
+      note: "Índice separado para busca semântica. Mantém metadados mínimos quando o conteúdo não é extraído, para seleção de candidatos antes da IA."
+    },
+    source: {
+      dataRepository: dataRepoFullName,
+      dataDefaultBranch
+    },
+    generatedAt: createdAt,
+    files: semanticFiles
   };
 
   const manifestResult = await putGithubFile(
@@ -691,6 +784,15 @@ async function writeIndexFilesToGithub({
     SEARCH_INDEX_PATH,
     stableJson(searchIndex),
     "AVDC: atualizar índice simples de busca",
+    token
+  );
+
+  const semanticResult = await putGithubFile(
+    indexRepoFullName,
+    indexDefaultBranch,
+    SEMANTIC_INDEX_PATH,
+    stableJson(semanticIndex),
+    "AVDC: atualizar índice semântico",
     token
   );
 
@@ -721,6 +823,7 @@ async function writeIndexFilesToGithub({
     manifestResult,
     catalogResult,
     searchResult,
+    semanticResult,
     extractionReportResult
   };
 }
@@ -800,20 +903,95 @@ async function resolveIndexRepo(config, token) {
   return { indexRepoFullName, branch };
 }
 
-// Carrega catalog.json e search-index.json do GitHub do cliente.
+// Carrega catalog.json, search-index.json e semantic-index.json do GitHub do cliente.
 async function loadIndexFromGithub(config, token) {
   const resolved = await resolveIndexRepo(config, token);
 
-  if (!resolved) return { catalog: null, searchIndex: null };
+  if (!resolved) return { catalog: null, searchIndex: null, semanticIndex: null };
 
   const { indexRepoFullName, branch } = resolved;
 
-  const [catalog, searchIndex] = await Promise.all([
+  const [catalog, searchIndex, semanticIndex] = await Promise.all([
     fetchIndexJson(indexRepoFullName, branch, CATALOG_PATH, token),
-    fetchIndexJson(indexRepoFullName, branch, SEARCH_INDEX_PATH, token)
+    fetchIndexJson(indexRepoFullName, branch, SEARCH_INDEX_PATH, token),
+    fetchIndexJson(indexRepoFullName, branch, SEMANTIC_INDEX_PATH, token)
   ]);
 
-  return { catalog, searchIndex, indexRepoFullName, branch };
+  return { catalog, searchIndex, semanticIndex, indexRepoFullName, branch };
+}
+
+function searchIndexFiles(searchIndex) {
+  return searchIndex && Array.isArray(searchIndex.files) ? searchIndex.files : null;
+}
+
+function buildEmptySearchIndexError(searchIndex, catalog) {
+  const catalogCount = Array.isArray(catalog?.files) ? catalog.files.length : null;
+  const generatedAt = searchIndex?.generatedAt || catalog?.generatedAt || null;
+  const message = catalogCount && catalogCount > 0
+    ? `O catálogo existe com ${catalogCount} arquivo(s), mas o search-index.json está vazio. Gere novamente o catálogo/índice para recriar o índice de busca.`
+    : "O search-index.json está vazio. Gere o catálogo do índice antes de usar a busca.";
+
+  const error = new Error(message);
+  error.status = 409;
+  error.payload = {
+    code: "EMPTY_SEARCH_INDEX",
+    catalogFilesCount: catalogCount,
+    searchIndexFilesCount: 0,
+    generatedAt,
+    action: "Clique em Criar catálogo do índice / Gerar índice novamente para recriar /avdc-index/search-index.json."
+  };
+  return error;
+}
+
+function assertUsableSearchIndex(searchIndex, catalog) {
+  const files = searchIndexFiles(searchIndex);
+  if (!files) {
+    const error = new Error("Nenhum índice de busca encontrado. Crie o catálogo primeiro.");
+    error.status = 400;
+    error.payload = { code: "SEARCH_INDEX_NOT_FOUND" };
+    throw error;
+  }
+  if (files.length === 0) {
+    throw buildEmptySearchIndexError(searchIndex, catalog);
+  }
+  return files;
+}
+
+function semanticIndexFiles(semanticIndex) {
+  return semanticIndex && Array.isArray(semanticIndex.files) ? semanticIndex.files : null;
+}
+
+function buildEmptySemanticIndexError(semanticIndex, catalog) {
+  const catalogCount = Array.isArray(catalog?.files) ? catalog.files.length : null;
+  const generatedAt = semanticIndex?.generatedAt || catalog?.generatedAt || null;
+  const message = catalogCount && catalogCount > 0
+    ? `O catálogo existe com ${catalogCount} arquivo(s), mas o semantic-index.json está vazio. Gere novamente o catálogo/índice para recriar o índice semântico separado.`
+    : "O semantic-index.json está vazio. Gere o catálogo do índice antes de usar a busca semântica.";
+
+  const error = new Error(message);
+  error.status = 409;
+  error.payload = {
+    code: "EMPTY_SEMANTIC_INDEX",
+    catalogFilesCount: catalogCount,
+    semanticIndexFilesCount: 0,
+    generatedAt,
+    action: "Clique em Criar catálogo do índice para recriar /avdc-index/semantic-index.json."
+  };
+  return error;
+}
+
+function assertUsableSemanticIndex(semanticIndex, catalog) {
+  const files = semanticIndexFiles(semanticIndex);
+  if (!files) {
+    const error = new Error("Nenhum índice semântico encontrado. Crie o catálogo para gerar /avdc-index/semantic-index.json.");
+    error.status = 400;
+    error.payload = { code: "SEMANTIC_INDEX_NOT_FOUND", action: "Clique em Criar catálogo do índice para gerar o índice semântico separado." };
+    throw error;
+  }
+  if (files.length === 0) {
+    throw buildEmptySemanticIndexError(semanticIndex, catalog);
+  }
+  return files;
 }
 
 // Ordena os arquivos do catálogo conforme o modo escolhido.
@@ -878,6 +1056,47 @@ function scoreIndexFileLoose(file, terms) {
   }
 
   return score;
+}
+
+function semanticResultIdCandidates(item) {
+  const values = [
+    item?.id,
+    item?.fileId,
+    item?.candidateId,
+    item?.candidate_id,
+    item?.index,
+    item?.path,
+    item?.file,
+    item?.name
+  ];
+
+  return values
+    .filter(value => value !== undefined && value !== null)
+    .map(value => String(value).trim())
+    .filter(Boolean);
+}
+
+function resolveSemanticResultFile(item, maps) {
+  for (const key of semanticResultIdCandidates(item)) {
+    if (maps.byId.has(key)) return maps.byId.get(key);
+    if (maps.byPath.has(key)) return maps.byPath.get(key);
+    if (maps.byName.has(key.toLowerCase())) return maps.byName.get(key.toLowerCase());
+  }
+
+  return null;
+}
+
+function buildSemanticResultFromFile(file, score, reason, query) {
+  return {
+    score: Number(score || 0),
+    name: file.name,
+    path: file.path,
+    extension: file.extension,
+    githubUrl: file.githubUrl,
+    contentIndexed: true,
+    semanticReason: String(reason || "Candidato mantido pelo fallback seguro da busca semântica do AVDC.").slice(0, 220),
+    snippet: makeSnippet(file.text || file.preview || file.path, tokenize(query)) || safePreview(file.text || file.preview || file.path, 420)
+  };
 }
 
 function hasUserAiConfigured(config) {
@@ -1053,18 +1272,22 @@ function fallbackSemanticResults(candidates, query, mode = "optimized", reason =
   return (candidates || [])
     .map((file, index) => {
       const rawScore = scoreIndexFile(file, terms);
-      const score = rawScore - semanticFilePenalty(file);
-      return { file, index, rawScore, score };
+      const looseScore = scoreIndexFileLoose(file, terms);
+      const effectiveScore = Math.max(rawScore, looseScore);
+      const score = effectiveScore - semanticFilePenalty(file);
+      return { file, index, rawScore: effectiveScore, score };
     })
-    .filter(item => item.rawScore > 0 && (item.score > 0 || mode === "full") && !isHiddenOrTechnicalPath(item.file?.path || item.file?.name))
+    .filter(item => item.rawScore > 0 && !isHiddenOrTechnicalPath(item.file?.path || item.file?.name))
     .sort((a, b) => b.score - a.score || b.rawScore - a.rawScore || String(a.file.path || "").localeCompare(String(b.file.path || "")))
     .slice(0, limit)
     .map(item => ({
       id: item.index + 1,
-      score: Math.max(0.35, Math.min(0.86, item.score / 30)),
+      score: Math.max(0.35, Math.min(0.86, Math.max(item.score, item.rawScore) / 30)),
       reason: reason === "empty_ai"
-        ? "A IA não retornou resultados estruturados; candidato mantido pelo ranqueamento filtrado do índice do AVDC."
-        : "Candidato selecionado pelo ranqueamento textual filtrado do AVDC antes da análise da IA."
+        ? "A IA não retornou resultados estruturados; candidato mantido pelo fallback seguro do índice do AVDC."
+        : reason === "invalid_ai_ids"
+          ? "A IA retornou resultados sem ID correspondente; candidato mantido pelo fallback seguro do índice do AVDC."
+          : "Candidato selecionado pelo ranqueamento textual filtrado do AVDC antes da análise da IA."
     }));
 }
 
@@ -1100,7 +1323,7 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
     const message = data.error?.message || data.message || `Motor de IA respondeu com status ${response.status}`;
     const error = new Error(
       isAiPayloadTooLargeMessage(message)
-        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.14 compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
+        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.17 compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
         : message
     );
     error.status = isAiPayloadTooLargeMessage(message) ? 413 : response.status;
@@ -1236,13 +1459,10 @@ router.get("/search", async (req, res) => {
       return res.status(400).json({ error: "Nenhum repositório de índice selecionado." });
     }
 
-    const { searchIndex } = await loadIndexFromGithub(config, config.githubToken);
+    const { catalog, searchIndex } = await loadIndexFromGithub(config, config.githubToken);
+    const indexFiles = assertUsableSearchIndex(searchIndex, catalog);
 
-    if (!searchIndex || !Array.isArray(searchIndex.files)) {
-      return res.status(400).json({ error: "Nenhum índice de busca encontrado. Crie o catálogo primeiro." });
-    }
-
-    const scored = searchIndex.files
+    const scored = indexFiles
       .map(file => ({ file, score: scoreIndexFile(file, terms) }))
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score || String(a.file.path).localeCompare(String(b.file.path)))
@@ -1265,7 +1485,7 @@ router.get("/search", async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(error.status || 500).json({ error: error.message || "Erro ao buscar no índice." });
+    res.status(error.status || 500).json({ error: error.message || "Erro ao buscar no índice.", ...(error.payload || {}) });
   }
 });
 
@@ -1298,40 +1518,62 @@ router.get("/search-semantic", async (req, res) => {
       return res.status(400).json({ error: "Nenhum repositório de índice selecionado." });
     }
 
-    const { searchIndex } = await loadIndexFromGithub(config, config.githubToken);
+    const { catalog, semanticIndex } = await loadIndexFromGithub(config, config.githubToken);
+    const indexFiles = assertUsableSemanticIndex(semanticIndex, catalog);
 
-    if (!searchIndex || !Array.isArray(searchIndex.files)) {
-      return res.status(400).json({ error: "Nenhum índice de busca encontrado. Crie o catálogo primeiro." });
-    }
-
-    const candidates = semanticCandidateFiles(searchIndex.files, q, mode);
+    const candidates = semanticCandidateFiles(indexFiles, q, mode);
 
     if (candidates.length === 0) {
-      return res.json({ ok: true, query: q, mode, semantic: true, provider: config.aiProvider, model: config.aiModel, results: [] });
+      return res.json({
+        ok: true,
+        query: q,
+        mode,
+        semantic: true,
+        provider: config.aiProvider,
+        model: config.aiModel,
+        candidatesSelected: 0,
+        searchIndexFilesCount: indexFiles.length,
+        warning: "O índice existe, mas nenhum candidato textual foi compatível com a busca. Tente um termo mais próximo do nome/caminho/conteúdo indexado.",
+        results: []
+      });
     }
 
     const semanticResponse = await callUserAiForSemanticSearch(config, q, candidates, mode);
-    const aiResults = semanticResponse.results || [];
+    let aiResults = semanticResponse.results || [];
     const candidateById = new Map(candidates.map((file, index) => [String(index + 1), file]));
+    const candidateByPath = new Map(candidates.map(file => [String(file.path || ""), file]));
+    const candidateByName = new Map(candidates.map(file => [String(file.name || "").toLowerCase(), file]));
+    const maps = { byId: candidateById, byPath: candidateByPath, byName: candidateByName };
 
-    const results = aiResults
+    let results = aiResults
       .map(item => {
-        const file = candidateById.get(String(item.id));
+        const file = resolveSemanticResultFile(item, maps);
         if (!file) return null;
-        return {
-          score: Number(item.score || 0),
-          name: file.name,
-          path: file.path,
-          extension: file.extension,
-          githubUrl: file.githubUrl,
-          contentIndexed: true,
-          semanticReason: String(item.reason || "Relevante para a busca semântica.").slice(0, 220),
-          snippet: makeSnippet(file.text || file.preview || file.path, tokenize(q)) || safePreview(file.text || file.preview || file.path, 420)
-        };
+        return buildSemanticResultFromFile(
+          file,
+          Number(item.score || 0),
+          item.reason || "Relevante para a busca semântica.",
+          q
+        );
       })
       .filter(Boolean)
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
+
+    let usedMappingFallback = false;
+    if (results.length === 0 && candidates.length > 0) {
+      usedMappingFallback = true;
+      aiResults = fallbackSemanticResults(candidates, q, mode, semanticResponse.usedFallback ? "empty_ai" : "invalid_ai_ids");
+      results = aiResults
+        .map(item => {
+          const file = candidateById.get(String(item.id));
+          if (!file) return null;
+          return buildSemanticResultFromFile(file, Number(item.score || 0), item.reason, q);
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 20);
+    }
 
     res.json({
       ok: true,
@@ -1341,15 +1583,17 @@ router.get("/search-semantic", async (req, res) => {
       provider: config.aiProvider,
       model: config.aiModel,
       compacted: !!semanticResponse.compacted,
-      usedFallback: !!semanticResponse.usedFallback,
+      usedFallback: !!semanticResponse.usedFallback || usedMappingFallback,
+      mappingFallback: usedMappingFallback,
+      candidatesSelected: candidates.length,
       candidatesSent: semanticResponse.candidatesSent,
       limits: {
         previewChars: semanticResponse.previewChars,
         maxPromptChars: semanticResponse.maxPromptChars,
         maxOutputTokens: semanticResponse.maxOutputTokens
       },
-      warning: semanticResponse.usedFallback
-        ? "A IA não retornou uma lista estruturada; o AVDC exibiu os melhores candidatos do índice local."
+      warning: (semanticResponse.usedFallback || usedMappingFallback)
+        ? "A IA não retornou resultado estruturado aproveitável; o AVDC exibiu os melhores candidatos do índice local."
         : semanticResponse.compacted
           ? "A consulta foi compactada automaticamente para respeitar o limite de tokens do provedor de IA."
           : null,
@@ -1357,7 +1601,7 @@ router.get("/search-semantic", async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(error.status || 500).json({ error: error.message || "Erro na busca semântica." });
+    res.status(error.status || 500).json({ error: error.message || "Erro na busca semântica.", ...(error.payload || {}) });
   }
 });
 

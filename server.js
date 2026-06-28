@@ -56,8 +56,8 @@ app.get("/health", (req, res) => {
   res.json({
     ok: true,
     app: "AVDC",
-    version: "6.0.14",
-    module: "v6-0-13-hotfix-busca-semantica-candidatos-versao",
+    version: "6.0.17",
+    module: "v6-0-17-indice-semantico-separado",
     database: process.env.DATABASE_URL ? "postgres" : "not-configured",
     githubConfigured: !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET && process.env.GITHUB_CALLBACK_URL),
     aiMode: "user-configured-optional"
@@ -69,7 +69,7 @@ async function start() {
     await initDatabase();
 
     app.listen(PORT, () => {
-      console.log(`AVDC V6.0.14 rodando na porta ${PORT}`);
+      console.log(`AVDC V6.0.17 rodando na porta ${PORT}`);
     });
   } catch (error) {
     console.error("Erro ao iniciar AVDC:", error);
