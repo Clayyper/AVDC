@@ -1,16 +1,19 @@
-# AVDC V6.0.13
+# AVDC V6.0.14
 
-Hotfix da busca semântica.
+Versão de hotfix da V6 com foco na busca semântica completa.
 
-## Correções
+## Correção principal
 
-- Corrige metadados que ainda apareciam como V6.0.9.
-- Ajusta seleção de candidatos da busca semântica para não zerar indevidamente.
-- Mantém filtros contra arquivos técnicos como `.gitkeep`, `.git/`, `avdc-index/` e `.avdc-index/`.
-- Mantém penalidade para `avdc-notes/*.vcd`, mas sem bloquear totalmente se for o único conteúdo relevante.
-- Adiciona tolerância de prefixo para buscas parciais, exemplo: `brada` encontrando termos como `bradesco`.
-- Preserva compactação de tokens da V6.0.9 e fallback estruturado da V6.0.11.
+A busca semântica completa não deve retornar zero quando existem candidatos textuais no índice e a busca otimizada consegue encontrar resultados.
 
-## Regra
+## Ajustes
 
-A busca completa não deve retornar zero quando existem candidatos textuais relevantes no índice.
+- Ranqueamento de resgate mais amplo para o modo completo.
+- Tolerância maior para busca parcial, como `brada` encontrando `bradesco`.
+- Fallback mais seguro quando a IA não retorna JSON estruturado.
+- Bloqueio preservado para arquivos técnicos (`.gitkeep`, `.git/`, `/avdc-index/`, `.avdc-index/`).
+- Penalização preservada para notas `.vcd`, sem bloqueio total.
+
+## Base
+
+Derivada da V6.0.13.

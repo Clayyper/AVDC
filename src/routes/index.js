@@ -302,6 +302,22 @@ function textHasPrefixTerm(text, term) {
   return unique.some(word => word.startsWith(prefix) || normalizedTerm.startsWith(word));
 }
 
+function textHasLoosePrefixTerm(text, term) {
+  const normalizedTerm = normalizeText(term);
+  if (normalizedTerm.length < 3) return false;
+
+  // Usado somente como resgate/fallback da busca semântica.
+  // Exemplo real validado: "brada" deve conseguir alcançar "bradesco"
+  // antes de a IA classificar os candidatos.
+  const prefix = normalizedTerm.slice(0, Math.min(4, normalizedTerm.length));
+  const words = normalizeText(text)
+    .split(/[^a-z0-9_]+/i)
+    .filter(word => word.length >= prefix.length);
+
+  const unique = Array.from(new Set(words)).slice(0, 1800);
+  return unique.some(word => word.startsWith(prefix) || normalizedTerm.startsWith(word));
+}
+
 function shouldTryExtractContent(file) {
   const ext = String(file.extension || "").toLowerCase();
   const size = Number(file.sizeBytes || 0);
@@ -578,7 +594,7 @@ async function writeIndexFilesToGithub({
 
   const manifest = {
     avdc: {
-      version: "6.0.13",
+      version: "6.0.14",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -609,7 +625,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "6.0.13",
+      version: "6.0.14",
       type: "catalog"
     },
     source: {
@@ -639,7 +655,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "6.0.13",
+      version: "6.0.14",
       type: "simple-search-index",
       note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
     },
@@ -851,6 +867,19 @@ function scoreIndexFile(file, terms) {
   return score;
 }
 
+function scoreIndexFileLoose(file, terms) {
+  const rawName = `${file.name || ""} ${file.path || ""} ${file.extension || ""}`;
+  const rawContent = file.text || file.preview || "";
+  let score = scoreIndexFile(file, terms);
+
+  for (const term of terms) {
+    if (textHasLoosePrefixTerm(rawName, term)) score += 3;
+    if (textHasLoosePrefixTerm(rawContent, term)) score += 1;
+  }
+
+  return score;
+}
+
 function hasUserAiConfigured(config) {
   return !!(config?.aiProvider && config?.aiBaseUrl && config?.aiModel && (config?.aiToken || config?.aiProvider === "ollama"));
 }
@@ -886,15 +915,14 @@ function compactSemanticText(value, maxChars) {
   return safePreview(String(value || "").replace(/\s+/g, " ").trim(), maxChars);
 }
 
-function semanticCandidateFiles(files, query, mode = "optimized") {
+function rankSemanticCandidates(files, query, mode = "optimized", loose = false) {
   const terms = tokenize(query);
-  const limits = semanticLimitsForMode(mode);
   const minimumScore = mode === "full" ? 1 : 2;
 
   const scoredAll = (files || [])
     .filter(file => !isHiddenOrTechnicalPath(file?.path || file?.name))
     .map(file => {
-      const rawScore = scoreIndexFile(file, terms);
+      const rawScore = loose ? scoreIndexFileLoose(file, terms) : scoreIndexFile(file, terms);
       const penalty = semanticFilePenalty(file);
       return { file, rawScore, penalty, score: rawScore - penalty };
     })
@@ -904,7 +932,29 @@ function semanticCandidateFiles(files, query, mode = "optimized") {
   const preferred = scoredAll.filter(item => item.score >= minimumScore);
   const source = preferred.length > 0 ? preferred : scoredAll.filter(item => item.score > -10);
 
-  return source.slice(0, limits.candidates).map(item => item.file);
+  return source;
+}
+
+function semanticCandidateFiles(files, query, mode = "optimized") {
+  const limits = semanticLimitsForMode(mode);
+  let ranked = rankSemanticCandidates(files, query, mode, false);
+
+  // O modo completo não pode morrer em zero quando a busca textual possui
+  // candidatos aproximados. Ele pode ser mais amplo, mas ainda filtrado.
+  if (ranked.length === 0 || (mode === "full" && ranked.length < Math.min(6, limits.candidates))) {
+    const looseRanked = rankSemanticCandidates(files, query, mode, true);
+    const seen = new Set(ranked.map(item => String(item.file?.path || item.file?.name || "")));
+    for (const item of looseRanked) {
+      const key = String(item.file?.path || item.file?.name || "");
+      if (!seen.has(key)) {
+        ranked.push(item);
+        seen.add(key);
+      }
+    }
+    ranked = ranked.sort((a, b) => b.score - a.score || b.rawScore - a.rawScore || String(a.file.path || "").localeCompare(String(b.file.path || "")));
+  }
+
+  return ranked.slice(0, limits.candidates).map(item => item.file);
 }
 
 function buildSemanticPayload(query, candidates, mode = "optimized") {
@@ -1006,7 +1056,7 @@ function fallbackSemanticResults(candidates, query, mode = "optimized", reason =
       const score = rawScore - semanticFilePenalty(file);
       return { file, index, rawScore, score };
     })
-    .filter(item => item.rawScore > 0 && item.score > 0 && !isHiddenOrTechnicalPath(item.file?.path || item.file?.name))
+    .filter(item => item.rawScore > 0 && (item.score > 0 || mode === "full") && !isHiddenOrTechnicalPath(item.file?.path || item.file?.name))
     .sort((a, b) => b.score - a.score || b.rawScore - a.rawScore || String(a.file.path || "").localeCompare(String(b.file.path || "")))
     .slice(0, limit)
     .map(item => ({
@@ -1050,7 +1100,7 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
     const message = data.error?.message || data.message || `Motor de IA respondeu com status ${response.status}`;
     const error = new Error(
       isAiPayloadTooLargeMessage(message)
-        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.13 compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
+        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.14 compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
         : message
     );
     error.status = isAiPayloadTooLargeMessage(message) ? 413 : response.status;
