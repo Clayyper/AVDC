@@ -1,30 +1,21 @@
-# AVDC V6.0.11 — Patch de correção da busca semântica completa
+# AVDC V6.0.12 — Patch de correção do fallback semântico
+
+## Objetivo
+Corrigir resultados ruins da busca semântica quando a IA não retorna JSON estruturado e o AVDC usa fallback local.
+
+## Arquivos alterados
+- package.json
+- src/routes/index.js
+- README.md
+- checkpoints/CHECKPOINT_V6_0_12_FILTRO_FALLBACK_SEMANTICO.md
+
+## Como aplicar
+Copie os arquivos deste patch sobre a base V6.0.11 ou suba o ZIP completo V6.0.12.
 
 ## Correção
-
-A busca semântica otimizada retornava resultados, mas a completa/avançada podia retornar zero quando a IA não devolvia JSON estruturado ou devolvia lista vazia.
-
-Esta versão corrige:
-
-- parser mais tolerante para resposta JSON da IA;
-- fallback automático para candidatos ranqueados pelo índice local quando a IA falha na estrutura;
-- busca completa não zera mais por falha de formatação da IA;
-- tolerância simples a erro de digitação, exemplo: `indentidade` vs `identidade`;
-- aviso técnico quando o fallback for usado.
-
-## Aplicação
-
-Copie o conteúdo deste patch sobre a raiz do projeto AVDC no repositório/deploy.
-
-## Arquivos incluídos
-
-- server.js
-- package.json
-- src/db.js
-- src/middleware.js
-- src/routes/*.js
-- public/index.html
-- public/app.js
-- public/style.css
-- README.md
-- checkpoints/CHECKPOINT_V6_0_11_FALLBACK_BUSCA_SEMANTICA_COMPLETA.md
+- Remove candidatos técnicos/ocultos do fallback semântico.
+- Bloqueia `.gitkeep`, `.keep`, `.DS_Store`, `Thumbs.db` e caminhos `.git/`.
+- Mantém bloqueio de `/avdc-index/` e `.avdc-index/`.
+- Penaliza `/avdc-notes/*.vcd` para não dominar resultados de arquivos originais.
+- Impede fallback com score zero.
+- Se não houver candidato textual positivo, retorna vazio em vez de mostrar lixo.

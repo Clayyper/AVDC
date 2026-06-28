@@ -73,6 +73,39 @@ function isReservedAvdcIndexPath(filePath) {
   );
 }
 
+function isHiddenOrTechnicalPath(filePath) {
+  const normalized = String(filePath || "").replace(/^\/+/, "").toLowerCase();
+  const parts = normalized.split("/").filter(Boolean);
+  const name = parts[parts.length - 1] || "";
+
+  return (
+    !normalized ||
+    isReservedAvdcIndexPath(normalized) ||
+    normalized === ".git" ||
+    normalized.startsWith(".git/") ||
+    normalized.includes("/.git/") ||
+    name === ".gitkeep" ||
+    name === ".keep" ||
+    name === ".ds_store" ||
+    name === "thumbs.db"
+  );
+}
+
+function semanticFilePenalty(file) {
+  const path = String(file?.path || "").replace(/^\/+/, "").toLowerCase();
+  const ext = String(file?.extension || "").toLowerCase();
+  const text = String(file?.text || file?.preview || "").trim();
+  let penalty = 0;
+
+  // Notas do AVDC são conteúdo auxiliar. Elas podem aparecer se forem muito relevantes,
+  // mas não devem dominar a busca semântica de arquivos originais do repositório.
+  if (path === "avdc-notes" || path.startsWith("avdc-notes/")) penalty += 18;
+  if (ext === "vcd") penalty += 8;
+  if (text.length < 20) penalty += 12;
+
+  return penalty;
+}
+
 function githubFileUrl(repoFullName, branch, filePath) {
   const encodedPath = String(filePath || "")
     .split("/")
@@ -838,13 +871,18 @@ function compactSemanticText(value, maxChars) {
 function semanticCandidateFiles(files, query, mode = "optimized") {
   const terms = tokenize(query);
   const limits = semanticLimitsForMode(mode);
+  const minimumScore = mode === "full" ? 2 : 3;
   const scored = (files || [])
-    .map(file => ({ file, score: scoreIndexFile(file, terms) }))
-    .sort((a, b) => b.score - a.score || String(a.file.path || "").localeCompare(String(b.file.path || "")));
+    .filter(file => !isHiddenOrTechnicalPath(file?.path || file?.name))
+    .map(file => {
+      const rawScore = scoreIndexFile(file, terms);
+      const penalty = semanticFilePenalty(file);
+      return { file, rawScore, penalty, score: rawScore - penalty };
+    })
+    .filter(item => item.rawScore > 0 && item.score >= minimumScore)
+    .sort((a, b) => b.score - a.score || b.rawScore - a.rawScore || String(a.file.path || "").localeCompare(String(b.file.path || "")));
 
-  const positive = scored.filter(item => item.score > 0).slice(0, limits.candidates);
-  const fallback = scored.slice(0, limits.candidates);
-  return (positive.length > 0 ? positive : fallback).map(item => item.file);
+  return scored.slice(0, limits.candidates).map(item => item.file);
 }
 
 function buildSemanticPayload(query, candidates, mode = "optimized") {
@@ -941,14 +979,21 @@ function fallbackSemanticResults(candidates, query, mode = "optimized", reason =
   const limit = mode === "full" ? 18 : 10;
 
   return (candidates || [])
-    .map((file, index) => ({
-      id: index + 1,
-      score: Math.max(0.35, Math.min(0.86, scoreIndexFile(file, terms) / 30)),
+    .map((file, index) => {
+      const rawScore = scoreIndexFile(file, terms);
+      const score = rawScore - semanticFilePenalty(file);
+      return { file, index, rawScore, score };
+    })
+    .filter(item => item.rawScore > 0 && item.score > 0 && !isHiddenOrTechnicalPath(item.file?.path || item.file?.name))
+    .sort((a, b) => b.score - a.score || b.rawScore - a.rawScore || String(a.file.path || "").localeCompare(String(b.file.path || "")))
+    .slice(0, limit)
+    .map(item => ({
+      id: item.index + 1,
+      score: Math.max(0.35, Math.min(0.86, item.score / 30)),
       reason: reason === "empty_ai"
-        ? "A IA não retornou resultados estruturados; candidato mantido pelo ranqueamento do índice do AVDC."
-        : "Candidato selecionado pelo ranqueamento textual do AVDC antes da análise da IA."
-    }))
-    .slice(0, limit);
+        ? "A IA não retornou resultados estruturados; candidato mantido pelo ranqueamento filtrado do índice do AVDC."
+        : "Candidato selecionado pelo ranqueamento textual filtrado do AVDC antes da análise da IA."
+    }));
 }
 
 async function callUserAiForSemanticSearch(config, query, candidates, mode = "optimized") {
