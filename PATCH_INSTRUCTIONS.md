@@ -1,39 +1,21 @@
-# AVDC V6.0.12 — Hotfix deploy Render + tokens da busca semântica
+# PATCH AVDC V6.0.13
 
-Este patch corrige o erro de deploy:
+Aplicar os arquivos deste patch sobre a V6 atual.
 
-```txt
-Error: Cannot find module './src/db'
-```
+## Arquivos alterados
 
-## Causa
+- package.json
+- server.js
+- public/index.html
+- public/app.js
+- src/routes/index.js
+- README.md
+- PATCH_INSTRUCTIONS.md
+- checkpoints/CHECKPOINT_V6_0_13_HOTFIX_BUSCA_SEMANTICA_ZERO_E_VERSAO.md
 
-O `server.js` chama `./src/db`, mas o patch anterior aplicado no Render não levou `src/db.js`.
+## Correções
 
-## Correção
-
-Este patch inclui todos os arquivos obrigatórios para o `server.js` iniciar:
-
-- `server.js`
-- `package.json`
-- `src/db.js`
-- `src/middleware.js`
-- `src/routes/auth.js`
-- `src/routes/admin.js`
-- `src/routes/user.js`
-- `src/routes/github.js`
-- `src/routes/index.js`
-- `src/routes/ai.js`
-- `public/index.html`
-- `public/app.js`
-- `public/style.css`
-
-Também preserva a correção da V6.0.9:
-
-- compactação da busca semântica;
-- limite de candidatos enviados à IA;
-- tratamento de erro de TPM/tokens.
-
-## Recomendação
-
-Se o Render já está com base incompleta, prefira subir o ZIP completo `AVDC-main-V6.0.12.zip`.
+- Atualiza metadados visíveis e manifest para V6.0.13.
+- Corrige busca semântica que podia retornar zero nas duas opções após o filtro da V6.0.12.
+- Reduz rigidez da seleção de candidatos sem reabrir arquivos técnicos.
+- Adiciona tolerância para busca parcial por prefixo.

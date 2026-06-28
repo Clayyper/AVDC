@@ -289,6 +289,19 @@ function textHasApproxTerm(text, term) {
   return unique.some(word => boundedEditDistance(word, normalizedTerm, maxDistance) <= maxDistance);
 }
 
+function textHasPrefixTerm(text, term) {
+  const normalizedTerm = normalizeText(term);
+  if (normalizedTerm.length < 4) return false;
+
+  const prefix = normalizedTerm.slice(0, Math.min(5, normalizedTerm.length));
+  const words = normalizeText(text)
+    .split(/[^a-z0-9_]+/i)
+    .filter(word => word.length >= prefix.length);
+
+  const unique = Array.from(new Set(words)).slice(0, 1200);
+  return unique.some(word => word.startsWith(prefix) || normalizedTerm.startsWith(word));
+}
+
 function shouldTryExtractContent(file) {
   const ext = String(file.extension || "").toLowerCase();
   const size = Number(file.sizeBytes || 0);
@@ -565,7 +578,7 @@ async function writeIndexFilesToGithub({
 
   const manifest = {
     avdc: {
-      version: "6.0.9",
+      version: "6.0.13",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -596,7 +609,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "6.0.9",
+      version: "6.0.13",
       type: "catalog"
     },
     source: {
@@ -626,7 +639,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "6.0.9",
+      version: "6.0.13",
       type: "simple-search-index",
       note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
     },
@@ -822,6 +835,11 @@ function scoreIndexFile(file, terms) {
     // Isso ajuda a busca semântica a escolher bons candidatos antes de chamar a IA.
     if (!haystackName.includes(term) && textHasApproxTerm(rawName, term)) score += 5;
     if (!haystackContent.includes(term) && textHasApproxTerm(rawContent, term)) score += 2;
+
+    // Tolerância de prefixo para buscas incompletas, exemplo: "brada" encontrando "bradesco".
+    // Isso evita que a busca semântica zere antes de chamar a IA.
+    if (!haystackName.includes(term) && textHasPrefixTerm(rawName, term)) score += 4;
+    if (!haystackContent.includes(term) && textHasPrefixTerm(rawContent, term)) score += 2;
   }
 
   if (terms.length > 1) {
@@ -871,18 +889,22 @@ function compactSemanticText(value, maxChars) {
 function semanticCandidateFiles(files, query, mode = "optimized") {
   const terms = tokenize(query);
   const limits = semanticLimitsForMode(mode);
-  const minimumScore = mode === "full" ? 2 : 3;
-  const scored = (files || [])
+  const minimumScore = mode === "full" ? 1 : 2;
+
+  const scoredAll = (files || [])
     .filter(file => !isHiddenOrTechnicalPath(file?.path || file?.name))
     .map(file => {
       const rawScore = scoreIndexFile(file, terms);
       const penalty = semanticFilePenalty(file);
       return { file, rawScore, penalty, score: rawScore - penalty };
     })
-    .filter(item => item.rawScore > 0 && item.score >= minimumScore)
+    .filter(item => item.rawScore > 0)
     .sort((a, b) => b.score - a.score || b.rawScore - a.rawScore || String(a.file.path || "").localeCompare(String(b.file.path || "")));
 
-  return scored.slice(0, limits.candidates).map(item => item.file);
+  const preferred = scoredAll.filter(item => item.score >= minimumScore);
+  const source = preferred.length > 0 ? preferred : scoredAll.filter(item => item.score > -10);
+
+  return source.slice(0, limits.candidates).map(item => item.file);
 }
 
 function buildSemanticPayload(query, candidates, mode = "optimized") {
@@ -1028,7 +1050,7 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
     const message = data.error?.message || data.message || `Motor de IA respondeu com status ${response.status}`;
     const error = new Error(
       isAiPayloadTooLargeMessage(message)
-        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.9 já compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
+        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.13 compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
         : message
     );
     error.status = isAiPayloadTooLargeMessage(message) ? 413 : response.status;

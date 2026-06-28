@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.9",
-  "description": "AVDC V6.0.9 - hotfix limite de tokens na busca semântica",
+  "version": "6.0.13",
+  "description": "AVDC V6.0.13 - hotfix busca semântica sem zero indevido e versão consolidada",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
