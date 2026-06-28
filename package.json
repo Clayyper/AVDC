@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.17",
-  "description": "AVDC V6.0.17 - índice semântico separado",
+  "version": "6.0.18",
+  "description": "AVDC V6.0.18 - índice semântico sob demanda",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

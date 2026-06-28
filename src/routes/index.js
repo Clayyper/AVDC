@@ -626,7 +626,7 @@ function buildSemanticIndexFiles(files) {
         used += text.length;
         textTruncated = originalText.length > text.length;
       } else {
-        // Premissa da V6.0.17: o índice semântico é separado, mas nunca vazio
+        // Premissa da V6.0.18: o índice semântico é separado, mas nunca vazio
         // quando o catálogo tem arquivos válidos. Arquivos sem conteúdo entram
         // com metadados pesquisáveis para seleção de candidatos antes da IA.
         text = fallbackText;
@@ -667,7 +667,7 @@ async function writeIndexFilesToGithub({
 
   const manifest = {
     avdc: {
-      version: "6.0.17",
+      version: "6.0.18",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -704,7 +704,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "6.0.17",
+      version: "6.0.18",
       type: "catalog"
     },
     source: {
@@ -734,7 +734,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "6.0.17",
+      version: "6.0.18",
       type: "simple-search-index",
       note: "Índice da busca simples. A busca semântica usa arquivo separado em /avdc-index/semantic-index.json."
     },
@@ -748,7 +748,7 @@ async function writeIndexFilesToGithub({
 
   const semanticIndex = {
     avdc: {
-      version: "6.0.17",
+      version: "6.0.18",
       type: "semantic-search-index",
       note: "Índice separado para busca semântica. Mantém metadados mínimos quando o conteúdo não é extraído, para seleção de candidatos antes da IA."
     },
@@ -919,6 +919,137 @@ async function loadIndexFromGithub(config, token) {
 
   return { catalog, searchIndex, semanticIndex, indexRepoFullName, branch };
 }
+async function buildSemanticIndexOnDemand(config, token, reason = "missing") {
+  const dataRepoFullName = config.selectedDataRepoFullName || config.selectedRepoFullName || null;
+  const indexRepoFullName = config.selectedIndexRepoFullName || null;
+
+  if (!dataRepoFullName) {
+    const error = new Error("Nenhum repositório de dados selecionado para criar o índice semântico.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!indexRepoFullName) {
+    const error = new Error("Nenhum repositório de índice selecionado para salvar o índice semântico.");
+    error.status = 400;
+    throw error;
+  }
+
+  const [dataRepo, indexRepo] = await Promise.all([
+    fetchGithubJson(`https://api.github.com/repos/${dataRepoFullName}`, token),
+    fetchGithubJson(`https://api.github.com/repos/${indexRepoFullName}`, token)
+  ]);
+
+  const dataDefaultBranch = dataRepo.default_branch || "main";
+  const indexDefaultBranch = indexRepo.default_branch || "main";
+  const createdAt = new Date().toISOString();
+  const runId = `semantic-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+
+  const tree = await fetchGithubJson(
+    `https://api.github.com/repos/${dataRepoFullName}/git/trees/${encodeURIComponent(dataDefaultBranch)}?recursive=1`,
+    token
+  );
+
+  const rawFiles = Array.isArray(tree.tree)
+    ? tree.tree.filter(item => item.type === "blob" && !isReservedAvdcIndexPath(item.path) && !isHiddenOrTechnicalPath(item.path))
+    : [];
+
+  const files = rawFiles.map(item => {
+    const { name, directory } = splitPath(item.path);
+    return {
+      path: item.path,
+      directory,
+      name,
+      extension: extensionFromName(name),
+      githubType: item.type,
+      sizeBytes: item.size ?? null,
+      sha: item.sha || null,
+      githubUrl: githubFileUrl(dataRepoFullName, dataDefaultBranch, item.path),
+      githubCreatedAt: null,
+      githubUpdatedAt: null,
+      discoveredAt: createdAt,
+      contentIndexed: false,
+      contentText: "",
+      contentPreview: "",
+      contentError: ""
+    };
+  });
+
+  const contentLimit = Math.max(0, envNumber("AVDC_SEMANTIC_ON_DEMAND_CONTENT_LIMIT", 120));
+  let triedContentCount = 0;
+  let contentIndexedCount = 0;
+
+  for (const file of files) {
+    if (contentLimit && triedContentCount >= contentLimit) break;
+    if (!shouldTryExtractContent(file)) continue;
+
+    triedContentCount += 1;
+
+    try {
+      const result = await fetchFileContent(dataRepoFullName, file.path, token);
+      if (result.text) {
+        file.contentText = result.text.slice(0, envNumber("AVDC_MAX_TEXT_CHARS", DEFAULT_MAX_TEXT_CHARS));
+        file.contentPreview = safePreview(file.contentText);
+        file.contentIndexed = true;
+        contentIndexedCount += 1;
+      } else {
+        file.contentError = result.error || "Sem texto extraível.";
+      }
+    } catch (error) {
+      file.contentError = error.message || String(error);
+    }
+  }
+
+  const semanticFiles = buildSemanticIndexFiles(files);
+  const semanticIndex = {
+    avdc: {
+      version: "6.0.18",
+      type: "semantic-search-index",
+      generationMode: "on-demand",
+      note: "Índice separado da busca semântica, criado/atualizado automaticamente na hora da busca quando ausente ou vazio."
+    },
+    source: {
+      dataRepository: dataRepoFullName,
+      dataDefaultBranch
+    },
+    generatedAt: createdAt,
+    run: {
+      id: runId,
+      reason,
+      filesDiscovered: files.length,
+      contentTried: triedContentCount,
+      contentIndexed: contentIndexedCount,
+      metadataOnlyFilesCount: semanticFiles.filter(file => file.metadataOnly).length,
+      treeTruncated: !!tree.truncated
+    },
+    files: semanticFiles
+  };
+
+  const writeResult = await putGithubFile(
+    indexRepoFullName,
+    indexDefaultBranch,
+    SEMANTIC_INDEX_PATH,
+    stableJson(semanticIndex),
+    "AVDC: criar índice semântico sob demanda",
+    token
+  );
+
+  return {
+    semanticIndex,
+    semanticIndexPath: SEMANTIC_INDEX_PATH,
+    semanticIndexCommitSha: writeResult.commitSha,
+    semanticIndexContentSha: writeResult.contentSha,
+    indexRepoFullName,
+    indexDefaultBranch,
+    createdAt,
+    filesDiscovered: files.length,
+    semanticFilesCount: semanticFiles.length,
+    contentTried: triedContentCount,
+    contentIndexed: contentIndexedCount,
+    reason
+  };
+}
+
 
 function searchIndexFiles(searchIndex) {
   return searchIndex && Array.isArray(searchIndex.files) ? searchIndex.files : null;
@@ -964,18 +1095,14 @@ function semanticIndexFiles(semanticIndex) {
 function buildEmptySemanticIndexError(semanticIndex, catalog) {
   const catalogCount = Array.isArray(catalog?.files) ? catalog.files.length : null;
   const generatedAt = semanticIndex?.generatedAt || catalog?.generatedAt || null;
-  const message = catalogCount && catalogCount > 0
-    ? `O catálogo existe com ${catalogCount} arquivo(s), mas o semantic-index.json está vazio. Gere novamente o catálogo/índice para recriar o índice semântico separado.`
-    : "O semantic-index.json está vazio. Gere o catálogo do índice antes de usar a busca semântica.";
-
-  const error = new Error(message);
+  const error = new Error("O índice semântico foi criado ou carregado, mas não possui arquivos pesquisáveis.");
   error.status = 409;
   error.payload = {
     code: "EMPTY_SEMANTIC_INDEX",
     catalogFilesCount: catalogCount,
     semanticIndexFilesCount: 0,
     generatedAt,
-    action: "Clique em Criar catálogo do índice para recriar /avdc-index/semantic-index.json."
+    action: "Execute a busca semântica novamente ou gere o índice semântico sob demanda; o AVDC não depende do botão Criar catálogo para a semântica."
   };
   return error;
 }
@@ -983,9 +1110,9 @@ function buildEmptySemanticIndexError(semanticIndex, catalog) {
 function assertUsableSemanticIndex(semanticIndex, catalog) {
   const files = semanticIndexFiles(semanticIndex);
   if (!files) {
-    const error = new Error("Nenhum índice semântico encontrado. Crie o catálogo para gerar /avdc-index/semantic-index.json.");
+    const error = new Error("Nenhum índice semântico encontrado. O AVDC deve criar /avdc-index/semantic-index.json automaticamente na hora da busca.");
     error.status = 400;
-    error.payload = { code: "SEMANTIC_INDEX_NOT_FOUND", action: "Clique em Criar catálogo do índice para gerar o índice semântico separado." };
+    error.payload = { code: "SEMANTIC_INDEX_NOT_FOUND", action: "Tente a busca semântica novamente; se persistir, verifique o repositório de índice e o token GitHub." };
     throw error;
   }
   if (files.length === 0) {
@@ -1323,7 +1450,7 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
     const message = data.error?.message || data.message || `Motor de IA respondeu com status ${response.status}`;
     const error = new Error(
       isAiPayloadTooLargeMessage(message)
-        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.17 compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
+        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.18 compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
         : message
     );
     error.status = isAiPayloadTooLargeMessage(message) ? 413 : response.status;
@@ -1519,7 +1646,23 @@ router.get("/search-semantic", async (req, res) => {
     }
 
     const { catalog, semanticIndex } = await loadIndexFromGithub(config, config.githubToken);
-    const indexFiles = assertUsableSemanticIndex(semanticIndex, catalog);
+    let indexFiles = semanticIndexFiles(semanticIndex);
+    let semanticIndexCreatedOnDemand = false;
+    let semanticIndexBuild = null;
+
+    if (!indexFiles || indexFiles.length === 0) {
+      semanticIndexBuild = await buildSemanticIndexOnDemand(
+        config,
+        config.githubToken,
+        !indexFiles ? "missing_before_search" : "empty_before_search"
+      );
+      semanticIndexCreatedOnDemand = true;
+      indexFiles = semanticIndexFiles(semanticIndexBuild.semanticIndex);
+    }
+
+    if (!indexFiles || indexFiles.length === 0) {
+      throw buildEmptySemanticIndexError(semanticIndexBuild?.semanticIndex || semanticIndex, catalog);
+    }
 
     const candidates = semanticCandidateFiles(indexFiles, q, mode);
 
@@ -1532,8 +1675,11 @@ router.get("/search-semantic", async (req, res) => {
         provider: config.aiProvider,
         model: config.aiModel,
         candidatesSelected: 0,
-        searchIndexFilesCount: indexFiles.length,
-        warning: "O índice existe, mas nenhum candidato textual foi compatível com a busca. Tente um termo mais próximo do nome/caminho/conteúdo indexado.",
+        semanticIndexFilesCount: indexFiles.length,
+        semanticIndexCreatedOnDemand,
+        semanticIndexPath: SEMANTIC_INDEX_PATH,
+        semanticIndexBuild,
+        warning: "O índice semântico existe, mas nenhum candidato textual foi compatível com a busca. Tente um termo mais próximo do nome/caminho/conteúdo indexado.",
         results: []
       });
     }
@@ -1587,6 +1733,10 @@ router.get("/search-semantic", async (req, res) => {
       mappingFallback: usedMappingFallback,
       candidatesSelected: candidates.length,
       candidatesSent: semanticResponse.candidatesSent,
+      semanticIndexFilesCount: indexFiles.length,
+      semanticIndexCreatedOnDemand,
+      semanticIndexPath: SEMANTIC_INDEX_PATH,
+      semanticIndexBuild,
       limits: {
         previewChars: semanticResponse.previewChars,
         maxPromptChars: semanticResponse.maxPromptChars,

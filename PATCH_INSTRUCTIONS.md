@@ -1,41 +1,49 @@
-# PATCH AVDC V6.0.17 — Índice semântico separado
+# PATCH AVDC V6.0.18 — Índice semântico sob demanda
 
 ## Objetivo
 
-Restaurar a premissa arquitetural da V6:
+Corrigir a premissa da busca semântica:
 
-- busca simples usa índice simples;
-- busca semântica usa índice semântico separado;
-- ambos ficam no mesmo diretório técnico `/avdc-index/`.
+> O índice semântico é separado e deve ser criado na hora da busca quando não existir ou estiver vazio.
 
-## Arquivos técnicos gerados no GitHub do usuário
+## Aplicação
 
-- `/avdc-index/catalog.json`
-- `/avdc-index/search-index.json`
-- `/avdc-index/semantic-index.json`
-- `/avdc-index/manifest.json`
-- `/avdc-index/extraction-report.txt`, quando relatório técnico for marcado
+Copie os arquivos do patch sobre a base V6.0.17 ou suba o projeto completo V6.0.18.
 
-## Arquivos alterados no patch
+## Arquivos alterados
 
 - `package.json`
 - `server.js`
+- `src/routes/index.js`
 - `public/index.html`
 - `public/app.js`
-- `src/routes/index.js`
 - `README.md`
 - `PATCH_INSTRUCTIONS.md`
-- `checkpoints/CHECKPOINT_V6_0_17_INDICE_SEMANTICO_SEPARADO.md`
+- `checkpoints/CHECKPOINT_V6_0_18_SEMANTIC_INDEX_ON_DEMAND.md`
 
-## Depois de aplicar
+## Mudança principal
 
-1. Subir o deploy.
-2. Entrar no AVDC.
-3. Clicar em **Criar catálogo do índice**.
-4. Confirmar no GitHub se foi criado:
-   - `/avdc-index/semantic-index.json`
-5. Testar a busca semântica novamente.
+Antes:
 
-## Observação
+- Busca semântica exigia `/avdc-index/semantic-index.json` já criado.
+- Se não existisse, mostrava aviso para criar catálogo.
 
-Apenas subir o código não cria o novo arquivo semântico no GitHub. É obrigatório regenerar o índice.
+Depois:
+
+- Busca semântica verifica `/avdc-index/semantic-index.json`.
+- Se não existir ou estiver vazio, cria automaticamente o índice semântico.
+- Depois pesquisa no índice recém-criado.
+
+## Arquivos técnicos mantidos separados
+
+- Busca simples: `/avdc-index/search-index.json`
+- Busca semântica: `/avdc-index/semantic-index.json`
+- Catálogo: `/avdc-index/catalog.json`
+
+## Validação sugerida
+
+1. Subir V6.0.18.
+2. Apagar ou não gerar `/avdc-index/semantic-index.json`.
+3. Marcar busca semântica.
+4. Pesquisar um termo.
+5. Confirmar que o AVDC cria `/avdc-index/semantic-index.json` e depois executa a busca.
