@@ -212,6 +212,50 @@ function tokenize(value) {
     .filter(token => token.length >= 2);
 }
 
+function boundedEditDistance(a, b, maxDistance = 2) {
+  a = String(a || "");
+  b = String(b || "");
+
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > maxDistance) return maxDistance + 1;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = current[0];
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const value = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + cost
+      );
+      current[j] = value;
+      if (value < rowMin) rowMin = value;
+    }
+
+    if (rowMin > maxDistance) return maxDistance + 1;
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[b.length];
+}
+
+function textHasApproxTerm(text, term) {
+  const normalizedTerm = normalizeText(term);
+  if (normalizedTerm.length < 5) return false;
+
+  const maxDistance = normalizedTerm.length >= 8 ? 2 : 1;
+  const words = normalizeText(text)
+    .split(/[^a-z0-9_]+/i)
+    .filter(word => word.length >= Math.max(4, normalizedTerm.length - maxDistance) && word.length <= normalizedTerm.length + maxDistance);
+
+  const unique = Array.from(new Set(words)).slice(0, 800);
+  return unique.some(word => boundedEditDistance(word, normalizedTerm, maxDistance) <= maxDistance);
+}
+
 function shouldTryExtractContent(file) {
   const ext = String(file.extension || "").toLowerCase();
   const size = Number(file.sizeBytes || 0);
@@ -730,14 +774,21 @@ function sortCatalogFiles(files, sortMode) {
 
 // Pontua um arquivo do search-index (formato { name, path, extension, text, preview }).
 function scoreIndexFile(file, terms) {
-  const haystackName = normalizeText(`${file.name || ""} ${file.path || ""} ${file.extension || ""}`);
-  const haystackContent = normalizeText(file.text || "");
+  const rawName = `${file.name || ""} ${file.path || ""} ${file.extension || ""}`;
+  const rawContent = file.text || file.preview || "";
+  const haystackName = normalizeText(rawName);
+  const haystackContent = normalizeText(rawContent);
 
   let score = 0;
 
   for (const term of terms) {
     if (haystackName.includes(term)) score += 8;
     if (haystackContent.includes(term)) score += 3;
+
+    // Tolerância simples para erro de digitação, exemplo: "indentidade" vs "identidade".
+    // Isso ajuda a busca semântica a escolher bons candidatos antes de chamar a IA.
+    if (!haystackName.includes(term) && textHasApproxTerm(rawName, term)) score += 5;
+    if (!haystackContent.includes(term) && textHasApproxTerm(rawContent, term)) score += 2;
   }
 
   if (terms.length > 1) {
@@ -858,6 +909,48 @@ function isAiPayloadTooLargeMessage(message) {
     || text.includes("reduce") && text.includes("tokens");
 }
 
+function parseAiSemanticJson(content) {
+  const raw = String(content || "").trim();
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  const attempts = [cleaned];
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    attempts.push(cleaned.slice(firstBrace, lastBrace + 1));
+  }
+
+  for (const attempt of attempts) {
+    try {
+      const parsed = JSON.parse(attempt);
+      return Array.isArray(parsed.results) ? parsed.results : [];
+    } catch {
+      // tenta a próxima forma
+    }
+  }
+
+  return [];
+}
+
+function fallbackSemanticResults(candidates, query, mode = "optimized", reason = "fallback") {
+  const terms = tokenize(query);
+  const limit = mode === "full" ? 18 : 10;
+
+  return (candidates || [])
+    .map((file, index) => ({
+      id: index + 1,
+      score: Math.max(0.35, Math.min(0.86, scoreIndexFile(file, terms) / 30)),
+      reason: reason === "empty_ai"
+        ? "A IA não retornou resultados estruturados; candidato mantido pelo ranqueamento do índice do AVDC."
+        : "Candidato selecionado pelo ranqueamento textual do AVDC antes da análise da IA."
+    }))
+    .slice(0, limit);
+}
+
 async function callUserAiForSemanticSearch(config, query, candidates, mode = "optimized") {
   const headers = {
     "Content-Type": "application/json",
@@ -899,28 +992,18 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
   }
 
   const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.text || "";
-  const jsonText = String(content).replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+  const parsedResults = parseAiSemanticJson(content);
+  const usedFallback = parsedResults.length === 0;
 
-  try {
-    const parsed = JSON.parse(jsonText);
-    return {
-      results: Array.isArray(parsed.results) ? parsed.results : [],
-      compacted: payload.compacted,
-      candidatesSent: candidates.length,
-      previewChars: payload.limits.previewChars,
-      maxPromptChars: payload.limits.maxPromptChars,
-      maxOutputTokens: payload.limits.maxOutputTokens
-    };
-  } catch {
-    return {
-      results: [],
-      compacted: payload.compacted,
-      candidatesSent: candidates.length,
-      previewChars: payload.limits.previewChars,
-      maxPromptChars: payload.limits.maxPromptChars,
-      maxOutputTokens: payload.limits.maxOutputTokens
-    };
-  }
+  return {
+    results: usedFallback ? fallbackSemanticResults(candidates, query, mode, "empty_ai") : parsedResults,
+    compacted: payload.compacted,
+    usedFallback,
+    candidatesSent: candidates.length,
+    previewChars: payload.limits.previewChars,
+    maxPromptChars: payload.limits.maxPromptChars,
+    maxOutputTokens: payload.limits.maxOutputTokens
+  };
 }
 
 router.get("/latest", async (req, res) => {
@@ -1141,15 +1224,18 @@ router.get("/search-semantic", async (req, res) => {
       provider: config.aiProvider,
       model: config.aiModel,
       compacted: !!semanticResponse.compacted,
+      usedFallback: !!semanticResponse.usedFallback,
       candidatesSent: semanticResponse.candidatesSent,
       limits: {
         previewChars: semanticResponse.previewChars,
         maxPromptChars: semanticResponse.maxPromptChars,
         maxOutputTokens: semanticResponse.maxOutputTokens
       },
-      warning: semanticResponse.compacted
-        ? "A consulta foi compactada automaticamente para respeitar o limite de tokens do provedor de IA."
-        : null,
+      warning: semanticResponse.usedFallback
+        ? "A IA não retornou uma lista estruturada; o AVDC exibiu os melhores candidatos do índice local."
+        : semanticResponse.compacted
+          ? "A consulta foi compactada automaticamente para respeitar o limite de tokens do provedor de IA."
+          : null,
       results
     });
   } catch (error) {
