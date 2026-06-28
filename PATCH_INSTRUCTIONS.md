@@ -1,32 +1,39 @@
-# AVDC V6.0.9 — Hotfix limite de tokens da busca semântica
+# AVDC V6.0.10 — Hotfix deploy Render + tokens da busca semântica
 
-## Objetivo
-
-Corrigir o erro de IA:
+Este patch corrige o erro de deploy:
 
 ```txt
-Request too large for gpt-4 ... tokens per min (TPM): Limit 10000, Requested 24237
+Error: Cannot find module './src/db'
 ```
 
-## Arquivos alterados
+## Causa
 
-```txt
-server.js
-package.json
-src/routes/index.js
-public/index.html
-public/app.js
-README.md
-checkpoints/CHECKPOINT_V6_0_9_HOTFIX_TOKENS_BUSCA_SEMANTICA.md
-```
+O `server.js` chama `./src/db`, mas o patch anterior aplicado no Render não levou `src/db.js`.
 
-## Aplicação
+## Correção
 
-Copie os arquivos do patch sobre a base V6 atual e faça novo deploy no Render.
+Este patch inclui todos os arquivos obrigatórios para o `server.js` iniciar:
 
-Se a base no Render estiver instável ou incompleta, use o ZIP completo da V6.0.9.
+- `server.js`
+- `package.json`
+- `src/db.js`
+- `src/middleware.js`
+- `src/routes/auth.js`
+- `src/routes/admin.js`
+- `src/routes/user.js`
+- `src/routes/github.js`
+- `src/routes/index.js`
+- `src/routes/ai.js`
+- `public/index.html`
+- `public/app.js`
+- `public/style.css`
 
-## Regra corrigida
+Também preserva a correção da V6.0.9:
 
-A busca semântica não pode enviar o índice inteiro ou candidatos grandes demais para a IA.
-Agora ela reduz candidatos, compacta prévias, limita saída e retorna aviso quando a consulta foi compactada.
+- compactação da busca semântica;
+- limite de candidatos enviados à IA;
+- tratamento de erro de TPM/tokens.
+
+## Recomendação
+
+Se o Render já está com base incompleta, prefira subir o ZIP completo `AVDC-main-V6.0.10.zip`.
