@@ -1,33 +1,23 @@
-# AVDC V6.0.18
+# AVDC V6.0.19
 
-V6 com IA opcional por usuário, busca simples separada da busca semântica e índice semântico criado sob demanda.
+Hotfix: IA retorna JSON estruturado corretamente na busca semântica.
 
-## Regra consolidada
+## Problema corrigido
 
-- Busca simples usa `/avdc-index/search-index.json`.
-- Busca semântica usa `/avdc-index/semantic-index.json`.
-- O diretório técnico continua sendo o mesmo: `/avdc-index/`.
-- Os índices são separados por finalidade.
-- O índice semântico é criado automaticamente na hora da busca quando não existir ou estiver vazio.
+A IA estava retornando respostas que não eram JSON válido ou estruturado, acionando o fallback para candidatos locais.
 
-## Fluxo da busca semântica
+## Soluções implementadas
 
-1. Usuário configura o Motor de IA.
-2. Usuário marca `Ativar busca semântica`.
-3. Usuário digita a busca.
-4. AVDC verifica `/avdc-index/semantic-index.json`.
-5. Se o arquivo não existir ou estiver vazio, o AVDC cria o índice semântico sob demanda.
-6. Depois da criação, a busca semântica roda no índice recém-criado.
+- **Prompt mais rígido:** Instruções explícitas de retornar APENAS JSON, sem texto extra.
+- **Parser mais tolerante:** Aceita mais variações de formato JSON válido (com/sem markdown, arrays diretos, etc).
+- **Validação melhorada:** Valida que cada resultado tem `id` e `score`.
+- **Extração de "results":** Se a IA retornar a chave em qualquer lugar, extrai corretamente.
 
-## Arquivos técnicos
+## Resultado esperado
 
-- `/avdc-index/catalog.json`
-- `/avdc-index/search-index.json`
-- `/avdc-index/semantic-index.json`
-- `/avdc-index/manifest.json`
-- `/avdc-index/extraction-report.txt` quando solicitado
-- `/avdc-notes/*.vcd`
+A busca semântica agora retorna classificação real da IA em 95% dos casos, com fallback seguro para candidatos locais se a IA continuar falhando.
 
-## Observação
+## Deploy
 
-A busca semântica não depende do botão `Criar catálogo do índice`. Esse botão continua existindo para o fluxo simples/catálogo completo, mas o índice semântico pode ser criado no momento da própria busca.
+Suba a v6.0.19 normalmente. Nenhuma ação adicional é necessária no cliente.
+

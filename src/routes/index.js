@@ -1314,16 +1314,22 @@ function buildSemanticPayload(query, candidates, mode = "optimized") {
   }));
 
   let prompt = [
-    "Você é o motor semântico do AVDC.",
-    "Classifique os candidatos mais relevantes para a pergunta do usuário.",
-    "Responda somente JSON válido no formato: {\"results\":[{\"id\":1,\"score\":0.95,\"reason\":\"explicação curta\"}]}",
-    "Use apenas os candidatos fornecidos. Não invente caminhos.",
-    "Retorne no máximo 10 resultados.",
-    `Modo solicitado: ${mode === "full" ? "semântica completa compactada" : "semântica otimizada compactada"}.`,
-    "",
+    "Você classifica candidatos por relevância semântica para a busca do usuário.",
     `Pergunta: ${compactSemanticText(query, 500)}`,
     "",
-    `Candidatos: ${JSON.stringify(compact)}`
+    "Candidatos:",
+    JSON.stringify(compact),
+    "",
+    "Responda APENAS com JSON válido neste formato exato, sem nenhuma palavra extra:",
+    "{\"results\":[{\"id\":1,\"score\":0.95,\"reason\":\"curto\"}]}",
+    "",
+    "Regras obrigatórias:",
+    "1. Apenas JSON válido, sem texto antes ou depois.",
+    "2. Use apenas IDs fornecidos (1 até " + candidates.length + ").",
+    "3. Score entre 0.5 e 1.0 (número decimal).",
+    "4. Máximo 10 resultados.",
+    "5. Reason com no máximo 40 caracteres.",
+    "6. Sem explicações, comentários ou markdown."
   ].join("\n");
 
   let compacted = false;
@@ -1336,17 +1342,10 @@ function buildSemanticPayload(query, candidates, mode = "optimized") {
         preview: compactSemanticText(item.preview, previewLimit)
       }));
       prompt = [
-        "Você é o motor semântico do AVDC.",
-        "Classifique os candidatos mais relevantes para a pergunta do usuário.",
-        "Responda somente JSON válido no formato: {\"results\":[{\"id\":1,\"score\":0.95,\"reason\":\"explicação curta\"}]}",
-        "Use apenas os candidatos fornecidos. Não invente caminhos.",
-        "Retorne no máximo 10 resultados.",
-        `Modo solicitado: ${mode === "full" ? "semântica completa compactada" : "semântica otimizada compactada"}.`,
-        "Entrada compactada automaticamente para respeitar o limite de tokens do provedor.",
-        "",
-        `Pergunta: ${compactSemanticText(query, 500)}`,
-        "",
-        `Candidatos: ${JSON.stringify(smaller)}`
+        "Classifique por relevância semântica para: " + compactSemanticText(query, 200),
+        "Candidatos: " + JSON.stringify(smaller),
+        "Responda APENAS em JSON: {\"results\":[{\"id\":1,\"score\":0.9,\"reason\":\"x\"}]}",
+        "Sem texto extra, apenas JSON válido, IDs de 1 a " + candidates.length + "."
       ].join("\n");
       previewLimit = Math.floor(previewLimit * 0.75);
     }
@@ -1367,6 +1366,8 @@ function isAiPayloadTooLargeMessage(message) {
 
 function parseAiSemanticJson(content) {
   const raw = String(content || "").trim();
+  
+  // Remove markdown code blocks
   const cleaned = raw
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
@@ -1374,18 +1375,44 @@ function parseAiSemanticJson(content) {
     .trim();
 
   const attempts = [cleaned];
+  
+  // Extrair JSON entre { }
   const firstBrace = cleaned.indexOf("{");
   const lastBrace = cleaned.lastIndexOf("}");
   if (firstBrace >= 0 && lastBrace > firstBrace) {
     attempts.push(cleaned.slice(firstBrace, lastBrace + 1));
   }
+  
+  // Extrair array de objetos
+  const firstBracket = cleaned.indexOf("[");
+  const lastBracket = cleaned.lastIndexOf("]");
+  if (firstBracket >= 0 && lastBracket > firstBracket) {
+    const arrayPart = cleaned.slice(firstBracket, lastBracket + 1);
+    attempts.push(`{"results":${arrayPart}}`);
+  }
+
+  // Procurar por "results" em qualquer lugar
+  const resultsMatch = cleaned.match(/"results"\s*:\s*\[([\s\S]*?)\]/i);
+  if (resultsMatch) {
+    attempts.push(`{"results":[${resultsMatch[1]}]}`);
+  }
 
   for (const attempt of attempts) {
     try {
       const parsed = JSON.parse(attempt);
-      return Array.isArray(parsed.results) ? parsed.results : [];
+      const results = Array.isArray(parsed.results) ? parsed.results : Array.isArray(parsed) ? parsed : [];
+      
+      // Validar que cada resultado tem id e score
+      const validResults = results.filter(r => 
+        typeof r.id !== 'undefined' && 
+        (typeof r.score === 'number' || typeof r.score === 'string')
+      );
+      
+      if (validResults.length > 0) {
+        return validResults.slice(0, 20); // Limitar a 20 resultados
+      }
     } catch {
-      // tenta a próxima forma
+      // Tenta a próxima forma
     }
   }
 

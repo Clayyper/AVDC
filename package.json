@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.18",
-  "description": "AVDC V6.0.18 - índice semântico sob demanda",
+  "version": "6.0.19",
+  "description": "AVDC V6.0.19 - IA retorna JSON estruturado na busca semântica",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
