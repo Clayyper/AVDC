@@ -193,3 +193,22 @@ Correção principal:
 
 Não altera a regra validada do botão de teste da IA salva no banco.
 Não altera a regra da busca semântica antes do catálogo.
+
+
+## V6.0.9 — hotfix de limite de tokens na busca semântica
+
+Correção aplicada após erro do provedor de IA:
+
+```txt
+Request too large ... tokens per min (TPM): Limit 10000, Requested 24237
+```
+
+A busca semântica continua funcional, mas agora envia um payload compacto para a IA:
+
+- modo otimizado: até 10 candidatos, prévia compactada e saída limitada;
+- modo completo: até 18 candidatos, prévia maior, mas ainda compactada;
+- `max_tokens` definido na chamada do modelo;
+- mensagem amigável quando o provedor recusar por limite de tokens;
+- retorno informa quando a consulta foi compactada automaticamente.
+
+Essa versão não altera o princípio da V6: IA opcional por usuário, busca simples sem IA e busca semântica somente com Motor de IA configurado.

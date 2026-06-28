@@ -1,50 +1,32 @@
-# AVDC V6.0.8 — Patch hotfix Render / dependências completas
+# AVDC V6.0.9 — Hotfix limite de tokens da busca semântica
 
 ## Objetivo
 
-Corrigir erro de deploy no Render:
+Corrigir o erro de IA:
 
 ```txt
-Error: Cannot find module './src/db'
-Require stack:
-- /opt/render/project/src/server.js
+Request too large for gpt-4 ... tokens per min (TPM): Limit 10000, Requested 24237
 ```
 
-## Causa
+## Arquivos alterados
 
-O `server.js` da V6 exige módulos como `src/db.js`, `src/middleware.js` e rotas em `src/routes/`.
-Quando um patch parcial é aplicado sobre uma base antiga/incompleta, esses arquivos podem não existir no repositório publicado.
+```txt
+server.js
+package.json
+src/routes/index.js
+public/index.html
+public/app.js
+README.md
+checkpoints/CHECKPOINT_V6_0_9_HOTFIX_TOKENS_BUSCA_SEMANTICA.md
+```
 
-## Correção
+## Aplicação
 
-Este patch inclui todos os arquivos necessários para o start do servidor, não apenas os arquivos visualmente alterados.
+Copie os arquivos do patch sobre a base V6 atual e faça novo deploy no Render.
 
-## Arquivos incluídos
+Se a base no Render estiver instável ou incompleta, use o ZIP completo da V6.0.9.
 
-- `server.js`
-- `package.json`
-- `src/db.js`
-- `src/middleware.js`
-- `src/routes/auth.js`
-- `src/routes/admin.js`
-- `src/routes/user.js`
-- `src/routes/github.js`
-- `src/routes/index.js`
-- `src/routes/ai.js`
-- `public/index.html`
-- `public/app.js`
-- `public/style.css`
-- `README.md`
-- `PATCH_INSTRUCTIONS.md`
-- `checkpoints/CHECKPOINT_V6_0_8_HOTFIX_DEPENDENCIAS_COMPLETAS_PATCH.md`
+## Regra corrigida
 
-## Como aplicar
-
-Copie o conteúdo deste patch sobre o repositório atual, preservando as mesmas pastas.
-
-Depois faça commit/push e redeploy no Render.
-
-## Regra preservada
-
-Esta versão não altera a lógica validada da V6.0.7.
-Ela apenas garante que o deploy tenha todos os módulos exigidos pelo `server.js`.
+A busca semântica não pode enviar o índice inteiro ou candidatos grandes demais para a IA.
+Agora ela reduz candidatos, compacta prévias, limita saída e retorna aviso quando a consulta foi compactada.

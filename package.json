@@ -1,7 +1,7 @@
 {
   "name": "avdc",
-  "version": "6.0.8",
-  "description": "AVDC V6.0.8 - hotfix deploy com dependências obrigatórias no patch",
+  "version": "6.0.9",
+  "description": "AVDC V6.0.9 - hotfix limite de tokens na busca semântica",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

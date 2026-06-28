@@ -562,7 +562,9 @@ async function searchSemanticIndex() {
     const results = data.results || [];
     const modeLabel = mode === "full" ? "semântica completa" : "semântica otimizada";
 
-    msg("semantic-search-msg", `${results.length} resultado(s) encontrado(s) em ${modeLabel}. Motor: ${data.provider || "-"} / ${data.model || "-"}.`, "ok");
+    const compactInfo = data.warning ? ` ${data.warning}` : "";
+    const candidateInfo = data.candidatesSent ? ` Candidatos enviados: ${data.candidatesSent}.` : "";
+    msg("semantic-search-msg", `${results.length} resultado(s) encontrado(s) em ${modeLabel}. Motor: ${data.provider || "-"} / ${data.model || "-"}.${candidateInfo}${compactInfo}`, "ok");
     renderSemanticSearchResults(results, q);
   } catch (err) {
     msg("semantic-search-msg", err.message, "error");

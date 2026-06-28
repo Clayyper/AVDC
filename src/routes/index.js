@@ -488,7 +488,7 @@ async function writeIndexFilesToGithub({
 
   const manifest = {
     avdc: {
-      version: "6.0.8",
+      version: "6.0.9",
       reservedDirectory: AVDC_INDEX_DIR,
       note: "Arquivos gerados pelo AVDC. Não editar manualmente."
     },
@@ -519,7 +519,7 @@ async function writeIndexFilesToGithub({
 
   const catalog = {
     avdc: {
-      version: "6.0.8",
+      version: "6.0.9",
       type: "catalog"
     },
     source: {
@@ -549,7 +549,7 @@ async function writeIndexFilesToGithub({
 
   const searchIndex = {
     avdc: {
-      version: "6.0.8",
+      version: "6.0.9",
       type: "simple-search-index",
       note: "Busca simples por nome, caminho e texto extraído. Ainda não usa IA."
     },
@@ -761,39 +761,101 @@ function aiChatCompletionsUrl(baseUrl) {
   return `${String(baseUrl || "").replace(/\/+$/, "")}/chat/completions`;
 }
 
+const SEMANTIC_LIMITS = {
+  optimized: {
+    candidates: 10,
+    previewChars: 500,
+    maxPromptChars: 7200,
+    maxOutputTokens: 650
+  },
+  full: {
+    candidates: 18,
+    previewChars: 700,
+    maxPromptChars: 11800,
+    maxOutputTokens: 900
+  }
+};
+
+function semanticLimitsForMode(mode = "optimized") {
+  return mode === "full" ? SEMANTIC_LIMITS.full : SEMANTIC_LIMITS.optimized;
+}
+
+function compactSemanticText(value, maxChars) {
+  return safePreview(String(value || "").replace(/\s+/g, " ").trim(), maxChars);
+}
+
 function semanticCandidateFiles(files, query, mode = "optimized") {
   const terms = tokenize(query);
-  const limit = mode === "full" ? 80 : 40;
+  const limits = semanticLimitsForMode(mode);
   const scored = (files || [])
     .map(file => ({ file, score: scoreIndexFile(file, terms) }))
     .sort((a, b) => b.score - a.score || String(a.file.path || "").localeCompare(String(b.file.path || "")));
 
-  const positive = scored.filter(item => item.score > 0).slice(0, limit);
-  const fallback = scored.slice(0, limit);
+  const positive = scored.filter(item => item.score > 0).slice(0, limits.candidates);
+  const fallback = scored.slice(0, limits.candidates);
   return (positive.length > 0 ? positive : fallback).map(item => item.file);
 }
 
-function buildSemanticPrompt(query, candidates, mode = "optimized") {
-  const previewLimit = mode === "full" ? 1800 : 900;
+function buildSemanticPayload(query, candidates, mode = "optimized") {
+  const limits = semanticLimitsForMode(mode);
   const compact = candidates.map((file, index) => ({
     id: index + 1,
-    path: file.path,
-    name: file.name,
-    extension: file.extension,
-    preview: safePreview(file.text || file.preview || file.path, previewLimit)
+    path: compactSemanticText(file.path, 260),
+    name: compactSemanticText(file.name, 140),
+    extension: compactSemanticText(file.extension, 30),
+    preview: compactSemanticText(file.text || file.preview || file.path, limits.previewChars)
   }));
 
-  return [
+  let prompt = [
     "Você é o motor semântico do AVDC.",
-    "Avalie quais arquivos parecem mais relevantes para a pergunta do usuário.",
+    "Classifique os candidatos mais relevantes para a pergunta do usuário.",
     "Responda somente JSON válido no formato: {\"results\":[{\"id\":1,\"score\":0.95,\"reason\":\"explicação curta\"}]}",
     "Use apenas os candidatos fornecidos. Não invente caminhos.",
-    `Modo solicitado: ${mode === "full" ? "semântica completa" : "semântica otimizada"}.`,
+    "Retorne no máximo 10 resultados.",
+    `Modo solicitado: ${mode === "full" ? "semântica completa compactada" : "semântica otimizada compactada"}.`,
     "",
-    `Pergunta: ${query}`,
+    `Pergunta: ${compactSemanticText(query, 500)}`,
     "",
     `Candidatos: ${JSON.stringify(compact)}`
   ].join("\n");
+
+  let compacted = false;
+  if (prompt.length > limits.maxPromptChars) {
+    compacted = true;
+    let previewLimit = Math.max(220, Math.floor(limits.previewChars * 0.55));
+    while (prompt.length > limits.maxPromptChars && previewLimit >= 160) {
+      const smaller = compact.map(item => ({
+        ...item,
+        preview: compactSemanticText(item.preview, previewLimit)
+      }));
+      prompt = [
+        "Você é o motor semântico do AVDC.",
+        "Classifique os candidatos mais relevantes para a pergunta do usuário.",
+        "Responda somente JSON válido no formato: {\"results\":[{\"id\":1,\"score\":0.95,\"reason\":\"explicação curta\"}]}",
+        "Use apenas os candidatos fornecidos. Não invente caminhos.",
+        "Retorne no máximo 10 resultados.",
+        `Modo solicitado: ${mode === "full" ? "semântica completa compactada" : "semântica otimizada compactada"}.`,
+        "Entrada compactada automaticamente para respeitar o limite de tokens do provedor.",
+        "",
+        `Pergunta: ${compactSemanticText(query, 500)}`,
+        "",
+        `Candidatos: ${JSON.stringify(smaller)}`
+      ].join("\n");
+      previewLimit = Math.floor(previewLimit * 0.75);
+    }
+  }
+
+  return { prompt: safePreview(prompt, limits.maxPromptChars), compacted, limits };
+}
+
+function isAiPayloadTooLargeMessage(message) {
+  const text = String(message || "").toLowerCase();
+  return text.includes("request too large")
+    || text.includes("tokens per min")
+    || text.includes("tpm")
+    || text.includes("maximum context")
+    || text.includes("context length")
+    || text.includes("reduce") && text.includes("tokens");
 }
 
 async function callUserAiForSemanticSearch(config, query, candidates, mode = "optimized") {
@@ -806,15 +868,18 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
     headers.Authorization = `Bearer ${config.aiToken}`;
   }
 
+  const payload = buildSemanticPayload(query, candidates, mode);
+
   const response = await fetch(aiChatCompletionsUrl(config.aiBaseUrl), {
     method: "POST",
     headers,
     body: JSON.stringify({
       model: config.aiModel,
       temperature: 0.1,
+      max_tokens: payload.limits.maxOutputTokens,
       messages: [
-        { role: "system", content: "Você classifica candidatos por relevância semântica para o AVDC." },
-        { role: "user", content: buildSemanticPrompt(query, candidates, mode) }
+        { role: "system", content: "Você classifica candidatos por relevância semântica para o AVDC. Responda curto e somente em JSON." },
+        { role: "user", content: payload.prompt }
       ]
     })
   });
@@ -823,8 +888,13 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
 
   if (!response.ok) {
     const message = data.error?.message || data.message || `Motor de IA respondeu com status ${response.status}`;
-    const error = new Error(message);
-    error.status = response.status;
+    const error = new Error(
+      isAiPayloadTooLargeMessage(message)
+        ? "A busca semântica tentou enviar conteúdo demais para o limite atual do provedor/modelo. A V6.0.9 já compacta automaticamente a consulta; tente novamente em modo otimizado ou com uma pergunta mais específica."
+        : message
+    );
+    error.status = isAiPayloadTooLargeMessage(message) ? 413 : response.status;
+    error.aiPayloadTooLarge = isAiPayloadTooLargeMessage(message);
     throw error;
   }
 
@@ -833,9 +903,23 @@ async function callUserAiForSemanticSearch(config, query, candidates, mode = "op
 
   try {
     const parsed = JSON.parse(jsonText);
-    return Array.isArray(parsed.results) ? parsed.results : [];
+    return {
+      results: Array.isArray(parsed.results) ? parsed.results : [],
+      compacted: payload.compacted,
+      candidatesSent: candidates.length,
+      previewChars: payload.limits.previewChars,
+      maxPromptChars: payload.limits.maxPromptChars,
+      maxOutputTokens: payload.limits.maxOutputTokens
+    };
   } catch {
-    return [];
+    return {
+      results: [],
+      compacted: payload.compacted,
+      candidatesSent: candidates.length,
+      previewChars: payload.limits.previewChars,
+      maxPromptChars: payload.limits.maxPromptChars,
+      maxOutputTokens: payload.limits.maxOutputTokens
+    };
   }
 }
 
@@ -1026,7 +1110,8 @@ router.get("/search-semantic", async (req, res) => {
       return res.json({ ok: true, query: q, mode, semantic: true, provider: config.aiProvider, model: config.aiModel, results: [] });
     }
 
-    const aiResults = await callUserAiForSemanticSearch(config, q, candidates, mode);
+    const semanticResponse = await callUserAiForSemanticSearch(config, q, candidates, mode);
+    const aiResults = semanticResponse.results || [];
     const candidateById = new Map(candidates.map((file, index) => [String(index + 1), file]));
 
     const results = aiResults
@@ -1055,6 +1140,16 @@ router.get("/search-semantic", async (req, res) => {
       semantic: true,
       provider: config.aiProvider,
       model: config.aiModel,
+      compacted: !!semanticResponse.compacted,
+      candidatesSent: semanticResponse.candidatesSent,
+      limits: {
+        previewChars: semanticResponse.previewChars,
+        maxPromptChars: semanticResponse.maxPromptChars,
+        maxOutputTokens: semanticResponse.maxOutputTokens
+      },
+      warning: semanticResponse.compacted
+        ? "A consulta foi compactada automaticamente para respeitar o limite de tokens do provedor de IA."
+        : null,
       results
     });
   } catch (error) {
